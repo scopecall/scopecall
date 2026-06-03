@@ -1,22 +1,39 @@
-# ScopeCall
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/brand/hero-dark.svg">
+    <img alt="ScopeCall — See every call. Own your AI bill." src="assets/brand/hero-light.svg" width="800">
+  </picture>
+</p>
 
-Source-available, self-hostable AI observability. See every call your AI makes, track what it costs, and trace what went wrong — without routing traffic through a proxy.
+<h1 align="center">ScopeCall</h1>
 
-ScopeCall captures LLM traces via SDK instrumentation (no added latency, no proxy) — OpenAI, Anthropic, and the Vercel AI SDK at v0.1.1 — ships the events to a self-hosted ClickHouse + Postgres stack, and displays them in a real-time dashboard with cost / latency / prompt-version breakdowns. Budget enforcement and an agent execution debugger are on the roadmap.
+<p align="center">
+  <a href="https://github.com/scopecall/scopecall/releases/tag/v0.1.1"><img src="https://img.shields.io/badge/version-v0.1.1-6366f1" alt="Version"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-BUSL--1.1-blue" alt="License"></a>
+  <a href="https://www.npmjs.com/package/@scopecall/scopecall-js"><img src="https://img.shields.io/npm/v/@scopecall/scopecall-js?label=npm&color=cb3837" alt="npm"></a>
+  <a href="https://pypi.org/project/scopecall-py/"><img src="https://img.shields.io/pypi/v/scopecall-py?label=pypi&color=3776ab" alt="PyPI"></a>
+  <a href="https://docs.scopecall.com"><img src="https://img.shields.io/badge/docs-docs.scopecall.com-informational" alt="Docs"></a>
+</p>
+
+---
+
+[ScopeCall](https://scopecall.com) is source-available, self-hostable AI cost and workflow observability. Find the prompt, customer, model, and workflow path behind every LLM cost spike — without routing traffic through a proxy.
+
+ScopeCall captures LLM traces via SDK instrumentation (no added latency, no proxy) — TypeScript (OpenAI, Anthropic, Vercel AI SDK) and Python (OpenAI, Anthropic; sync, async, streaming) — ships the events to a self-hosted ClickHouse + Postgres stack, and displays them in a real-time dashboard with cost / latency / prompt-version breakdowns. Budget enforcement and an agent execution debugger are on the roadmap.
 
 Licensed under [BUSL-1.1](LICENSE) — free for any internal use; we just ask that you not resell it as a managed service. The license converts to Apache-2.0 four years after each release.
-
-[![Version](https://img.shields.io/badge/version-v0.1.1-6366f1)](https://github.com/scopecall/scopecall/releases/tag/v0.1.1)
-[![License](https://img.shields.io/badge/license-BUSL--1.1-blue)](LICENSE)
-[![Docs](https://img.shields.io/badge/docs-docs.scopecall.com-informational)](https://docs.scopecall.com)
 
 ---
 
 ## What ships in v0.1.1
 
-- TypeScript SDK with OpenAI (`chat.completions.create`), Anthropic
-  (`messages.create`), and Vercel AI SDK (`generateText` / `streamText` /
+- TypeScript SDK (`@scopecall/scopecall-js`) with OpenAI (`chat.completions.create`),
+  Anthropic (`messages.create`), and Vercel AI SDK (`generateText` / `streamText` /
   `generateObject` / `streamObject`) instrumentation — streaming + non-streaming.
+- Python SDK (`scopecall-py`) with OpenAI + Anthropic sync/async/streaming
+  instrumentation, workflow spans (`sdk.trace()`), `contextvars`-based trace
+  propagation across `await`, PII redaction, and a manual `record_llm_call(...)`
+  escape hatch for LangChain / LlamaIndex / custom wrappers.
 - Persisted workflow spans (`sdk.trace()`) so the trace tree + Flow Map
   show real parent → child structure, not flat call lists.
 - Server-authoritative pricing — the Rust processor recomputes `cost_usd`
@@ -67,13 +84,17 @@ navigate to `/dashboard/settings/keys`) and click **Generate key**. Copy the
 raw token immediately — ScopeCall only ever stores a hash, so the dashboard
 can't show it to you again.
 
-### 3. Install the TypeScript SDK
+### 3. Install the SDK + instrument your app
+
+Pick your stack. Both SDKs ship the same wire format and the same dashboard
+features — workflow spans, streaming + TTFT capture, server-recomputed cost,
+prompt versioning, PII redaction.
+
+#### TypeScript
 
 ```bash
 npm install @scopecall/scopecall-js
 ```
-
-### 4. Instrument OpenAI
 
 ```typescript
 import { init } from "@scopecall/scopecall-js";
@@ -96,6 +117,39 @@ const response = await openai.chat.completions.create({
   model: "gpt-4o",
   messages: [{ role: "user", content: "Hello" }],
 });
+```
+
+#### Python
+
+```bash
+pip install scopecall-py
+# Or with provider extras (recommended):
+pip install "scopecall-py[openai]"
+pip install "scopecall-py[anthropic]"
+```
+
+```python
+import os
+import scopecall
+from openai import OpenAI
+
+sdk = scopecall.init(
+    api_key=os.environ["SCOPECALL_API_KEY"],   # the key you generated in step 2
+    endpoint="http://localhost:8080/v1/ingest",
+)
+
+# Auto-detects sync vs async — pass AsyncOpenAI() for async.
+client = sdk.instrument(OpenAI())
+
+# sdk.trace() is the unit of workflow observability — every LLM call
+# inside this block is chained as a child in the dashboard's trace tree.
+with sdk.trace("hello-world", feature_name="demo"):
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": "Hello"}],
+    )
+
+sdk.flush()   # ensure the event leaves the process before exit
 ```
 
 Open the dashboard and your trace appears within seconds.

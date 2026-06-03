@@ -7,12 +7,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
-COPY package.json package-lock.json ./
-RUN npm ci --ignore-scripts
+# pnpm via corepack (bundled with Node 20+). Pinned via packageManager
+# field below would be ideal, but we install a known-good version here
+# so the build is reproducible without a packageManager pin.
+RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
+
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile --ignore-scripts
 
 # ── Stage 2: Build ────────────────────────────────────────────────────────────
 FROM node:20-slim AS builder
 WORKDIR /app
+
+RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
@@ -26,7 +33,7 @@ ENV NEXT_PUBLIC_AUTH_PROVIDER=$NEXT_PUBLIC_AUTH_PROVIDER
 # Disable telemetry in CI / reproducible builds
 ENV NEXT_TELEMETRY_DISABLED=1
 
-RUN npm run build
+RUN pnpm run build
 
 # ── Stage 3: Runtime ──────────────────────────────────────────────────────────
 FROM node:20-slim AS runner

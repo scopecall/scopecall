@@ -15,42 +15,41 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { cn } from "@/lib/utils";
 
-// Top header strip — Supabase-style. Sits above sidebar+main, full width.
-// Left:  ScopeCall wordmark (logo gradient) + breadcrumb (org context).
+// Top header strip — sits above sidebar+main, full width.
+// Left:  ScopeCall horizontal logo (mark + wordmark), theme-aware swap.
 // Right: ⌘K hint, profile menu (with theme switcher + sign out).
-export function TopHeader({ orgId }: { orgId?: string }) {
+//
+// The `orgId` prop is intentionally accepted (and currently unused). It used
+// to drive a breadcrumb chip + DEV/STAGING/PROD env pill in the header; both
+// were removed in favour of a cleaner brand-only left rail. We keep the prop
+// so call sites don't need to change and so a future "switch org" menu can
+// land here without touching the caller in dashboard/providers.tsx.
+export function TopHeader({ orgId: _orgId }: { orgId?: string }) {
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
   useEffect(() => {
     auth.getUser().then((u) => setUserEmail(u?.email ?? null));
   }, []);
 
-  // Compact org label: short hash of orgId, or fallback. Real org names land
-  // here once the orgs table is queryable from the dashboard.
-  const orgLabel = orgId ? orgId.replace(/^org_/, "").slice(0, 8) : "—";
-
   return (
     <header className="h-12 flex items-center px-3 border-b border-border bg-background shrink-0">
-      {/* Logo mark — vector SVG at public/scopecall-mark.svg. Vector means it
-          stays crisp at 1× and 2× DPR without shipping a separate retina asset.
-          Sized at h-9 (36px) inside an h-12 (48px) header — leaves 6px
-          breathing room top/bottom and lets the dot-grid be legible. */}
+      {/* Horizontal logo — mark + wordmark in one SVG. Two files in public/
+          so the CSS-only swap below works without JS hydration delay:
+            - scopecall-horizontal-dark.svg → black wordmark, used in light theme
+            - scopecall-horizontal.svg      → white wordmark, used in dark theme
+          Sized at h-8 (32px) inside the h-12 (48px) header. The SVGs have a
+          800×240 viewBox (~3.33:1 aspect) so this renders at ~107×32. */}
       <img
-        src="/scopecall-mark.svg"
+        src="/scopecall-horizontal-dark.svg"
         alt="ScopeCall"
-        className="h-9 w-9"
+        className="h-8 w-auto block dark:hidden"
       />
-
-      {/* Breadcrumb chevron */}
-      <span className="mx-3 text-muted-foreground/40 select-none">/</span>
-
-      {/* Org chip */}
-      <BreadcrumbChip label={orgLabel} title="Organization" />
-
-      {/* Env pill — colour-coded from NEXT_PUBLIC_ENV (defaults to DEV). */}
-      <EnvPill />
+      <img
+        src="/scopecall-horizontal.svg"
+        alt="ScopeCall"
+        className="h-8 w-auto hidden dark:block"
+      />
 
       <div className="flex-1" />
 
@@ -61,38 +60,6 @@ export function TopHeader({ orgId }: { orgId?: string }) {
       </kbd>
       <UserMenu userEmail={userEmail} />
     </header>
-  );
-}
-
-function EnvPill() {
-  // NEXT_PUBLIC_ envs are baked at build time. Default to DEV when unset so
-  // localhost / first-run installs don't show a confusing "PROD" badge.
-  const env = (process.env.NEXT_PUBLIC_ENV ?? "DEV").toUpperCase();
-  // Colour intensity rises with environment criticality so PROD reads as
-  // "be careful here", DEV as "safe to break things".
-  // Theme-aware: -400 text vanished on the light cream surface. -700 / -300
-  // dark contrasts cleanly in both themes. (Round-6 user-reported.)
-  const palette: Record<string, string> = {
-    PROD:    "bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/30",
-    STAGING: "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/20",
-    DEV:     "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/20",
-  };
-  const cls = palette[env] ?? "bg-muted text-muted-foreground border-border";
-  return (
-    <span className={cn("ml-2 inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium rounded border", cls)}>
-      {env}
-    </span>
-  );
-}
-
-function BreadcrumbChip({ label, title }: { label: string; title?: string }) {
-  return (
-    <span
-      title={title}
-      className="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs text-foreground border border-border rounded font-mono"
-    >
-      {label}
-    </span>
   );
 }
 
