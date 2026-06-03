@@ -1,0 +1,47 @@
+# Rust build artifacts
+services-rust/target/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+dist/
+build/
+*.egg-info/
+*.egg
+
+# Secrets
+.env
+.env.local
+.env.*.local
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# ─── PRIVATE STRATEGY DOCS — belt-and-suspenders ──────────────────────────────
+# These files live in the private scopecall-internal repo.
+# If they ever reappear in this directory, do NOT commit them.
+# See: /Users/vikash/ai-work/scopecall-internal/
+PLAN.md
+PITCH.md
+GTM.md
+CHALLENGES.md
+REPO_STRATEGY.md
+# Top-level only — the leading "/" stops this from matching Go's `internal/`
+# package convention under services-go/api/, which is a legitimate code path.
+/internal/
+
+# Build artifacts that shouldn't be committed
+services-go/tools/dlq-drain/dlq-drain
+services-dashboard/.claude/

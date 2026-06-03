@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+#
+# Scopecall public-repo leak guard.
+#
+# Scans STAGED CONTENT (not just commit messages) for internal terminology
+# that must never reach the public repo. Strategy lives in the private
+# scopecall-internal repo; this hook is the safety net.
+#
+# Bypass (use sparingly, only when you're certain a match is a false positive):
+#   SCOPECALL_ALLOW_INTERNAL=1 git commit ...
+#
+set -euo pipefail
+
+if [[ "${SCOPECALL_ALLOW_INTERNAL:-0}" == "1" ]]; then
+  echo "⚠️  SCOPECALL_ALLOW_INTERNAL=1 — leak guard bypassed."
+  exit 0
+fi
+
+# Files staged for commit (added/copied/modified), excluding deletions.
+staged=$(git diff --cached --name-only --diff-filter=ACM)
+[[ -z "$staged" ]] && exit 0
+
+fail=0
+
+# ── Block 1: private docs must never be committed to the public repo ──────────
+# Matches the private docs only at repo root (basename), so Go's internal/
+# package convention (services-go/api/internal/...) is NOT a false positive.
+private_docs_regex='^(PLAN|PITCH|GTM|CHALLENGES|REPO_STRATEGY|FEATURES)\.md$'
+while IFS= read -r f; do
+  if echo "$f" | grep -qE "$private_docs_regex"; then
+    echo "❌ BLOCKED: '$f' is a private doc — it belongs in scopecall-internal, not the public repo."
+    fail=1
+  fi
+done <<< "$staged"
+
+# ── Block 2: internal terminology in staged content ───────────────────────────
+# High-confidence patterns — these almost never appear legitimately in public.
+#   - Decision IDs:        D7.0, D9.4, D10.12, D0.3 …
+#   - Private doc refs:    PLAN.md, PITCH.md, GTM.md, CHALLENGES.md, REPO_STRATEGY.md
+#   - Strategic term:      "moat"
+block_regex='\bD[0-9]{1,2}\.[0-9]{1,2}\b|PLAN\.md|PITCH\.md|GTM\.md|CHALLENGES\.md|REPO_STRATEGY\.md|\bmoat\b'
+
+while IFS= read -r f; do
+  # Only scan text files that still exist in the working tree.
+  [[ -f "$f" ]] || continue
+  # Skip this hook itself (it contains the patterns by necessity) and
+  # .gitignore (it legitimately lists the private doc names to ignore them).
+  [[ "$f" == ".githooks/pre-commit" || "$f" == ".gitignore" ]] && continue
+  # Match against the STAGED version of the file.
+  matches=$(git show ":$f" 2>/dev/null | grep -nEi "$block_regex" || true)
+  if [[ -n "$matches" ]]; then
+    echo "❌ BLOCKED: '$f' contains internal terminology:"
+    echo "$matches" | sed 's/^/      /'
+    fail=1
+  fi
+done <<< "$staged"
+
+# ── Warnings: fuzzy patterns that may be legitimate — surfaced, not blocked ────
+warn_regex='\bPhase [0-9]+\b|\bMRR\b|\bM[1-4] moat\b'
+while IFS= read -r f; do
+  [[ -f "$f" ]] || continue
+  [[ "$f" == ".githooks/pre-commit" ]] && continue
+  matches=$(git show ":$f" 2>/dev/null | grep -nEi "$warn_regex" || true)
+  if [[ -n "$matches" ]]; then
+    echo "⚠️  WARNING: '$f' contains possibly-internal terms (review before pushing):"
+    echo "$matches" | head -5 | sed 's/^/      /'
+  fi
+done <<< "$staged"
+
+if [[ "$fail" == "1" ]]; then
+  echo ""
+  echo "Commit blocked. Remove the internal terminology above, or if it's a"
+  echo "genuine false positive, bypass with: SCOPECALL_ALLOW_INTERNAL=1 git commit ..."
+  exit 1
+fi
+
+exit 0

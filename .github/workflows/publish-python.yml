@@ -1,0 +1,125 @@
+name: Publish Python SDK
+
+# Publishes `scopecall-py` to PyPI when a tag matching `python-v*` is
+# pushed. We use a Python-specific tag prefix (rather than the same
+# `v*` tag used for image releases) because the Python SDK and the
+# npm SDK aren't always at the same version — npm package
+# (@scopecall/scopecall-js) is on 0.1.1 while PyPI package
+# (scopecall-py) is on 0.2.0. Separate tags = separate release cadences.
+#
+# Auth: PyPI trusted publisher (OIDC). No API token stored as a
+# secret. Configure the trusted publisher on PyPI's side once:
+#
+#   https://pypi.org/manage/account/publishing/
+#     PyPI project name: scopecall-py
+#     Owner:             scopecall
+#     Repository:        scopecall
+#     Workflow filename: publish-python.yml
+#     Environment name:  pypi
+#
+# Then GitHub's OIDC ID token swaps for a short-lived upload token
+# on every run. Nothing to rotate; nothing to leak.
+
+on:
+  push:
+    tags:
+      - "python-v*"
+  # Manual dispatch for dry-runs against TestPyPI. The job below honors
+  # `dry_run: true` by building + checking without uploading.
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Build + twine check only; don't upload"
+        type: boolean
+        default: true
+
+concurrency:
+  # One publish at a time per tag — concurrent uploads to PyPI would
+  # race on the upload step. Across different tags they're independent.
+  group: publish-python-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  # `id-token: write` is what unlocks PyPI's trusted publisher flow.
+  # Don't grant `contents: write` etc. unless we genuinely need it.
+  id-token: write
+  contents: read
+
+jobs:
+  build-and-publish:
+    name: Build + publish to PyPI
+    runs-on: ubuntu-latest
+    environment:
+      # The "pypi" environment is the one we registered as a trusted
+      # publisher on PyPI's side. Without this line, the OIDC token
+      # PyPI receives doesn't match the publisher config and the
+      # upload 403s.
+      name: pypi
+      url: https://pypi.org/project/scopecall-py/
+    defaults:
+      run:
+        working-directory: sdks/python
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tools
+        run: |
+          python -m pip install -U pip
+          pip install build twine
+
+      - name: Sanity check — tag version matches pyproject.toml
+        # Catches the "I bumped the tag but forgot pyproject" foot-gun.
+        # The tag is `python-vX.Y.Z`; we strip the prefix and compare.
+        # On workflow_dispatch (no tag), skip this check.
+        if: startsWith(github.ref, 'refs/tags/python-v')
+        run: |
+          TAG_VERSION="${GITHUB_REF#refs/tags/python-v}"
+          PROJECT_VERSION=$(python -c "import tomllib, sys; print(tomllib.loads(open('pyproject.toml').read())['project']['version'])")
+          echo "Tag:        $TAG_VERSION"
+          echo "pyproject:  $PROJECT_VERSION"
+          if [ "$TAG_VERSION" != "$PROJECT_VERSION" ]; then
+            echo "::error::Tag version ($TAG_VERSION) does not match pyproject.toml ($PROJECT_VERSION)"
+            exit 1
+          fi
+
+      - name: Build wheel + sdist
+        run: python -m build
+
+      - name: twine check
+        # Validates package metadata against PyPI's rules (README
+        # renders, classifiers are real, no missing required fields).
+        # Catches problems before the upload step where they'd be
+        # harder to retry.
+        run: twine check dist/*
+
+      - name: Publish to PyPI
+        # On workflow_dispatch with dry_run=true, stop here — we've
+        # already proven the build is valid.
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && !inputs.dry_run)
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: sdks/python/dist
+          # No password / token — the trusted publisher (configured
+          # on PyPI's side) trades GitHub's OIDC ID token for a
+          # short-lived upload token automatically.
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Python SDK publish"
+            echo ""
+            echo "| Step | Status |"
+            echo "|------|--------|"
+            echo "| Build | done |"
+            echo "| Tag: ${{ github.ref_name }} | |"
+            if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.dry_run }}" = "true" ]; then
+              echo "| Upload | **skipped (dry-run)** |"
+            else
+              echo "| Upload | https://pypi.org/project/scopecall-py/ |"
+            fi
+          } >> $GITHUB_STEP_SUMMARY

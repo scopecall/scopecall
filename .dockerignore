@@ -1,0 +1,22 @@
+# Repo-root Docker build context exclusions.
+# This governs the PROCESSOR image build (the only one that uses repo root as
+# context, because it embeds schemas/redaction/patterns.yaml via include_str!).
+# Keeps the context lean — excludes build artifacts, deps, and VCS.
+
+.git
+.github
+**/node_modules
+**/target
+**/dist
+**/.next
+**/.venv
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.log
+.env
+.env.*
+!.env.example
+assets/
+*.bundle
+.DS_Store

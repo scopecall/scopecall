@@ -1,0 +1,24 @@
+{
+  "extends": "next/core-web-vitals",
+  "rules": {
+    "no-restricted-imports": [
+      "error",
+      {
+        "patterns": [
+          {
+            "group": ["@supabase/*"],
+            "message": "Import auth utilities from @/lib/auth instead. Direct @supabase/* imports are only permitted in src/lib/auth/supabase.ts and src/lib/auth/supabase-server.ts."
+          }
+        ]
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": ["src/lib/auth/supabase.ts", "src/lib/auth/supabase-server.ts"],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
+    }
+  ]
+}

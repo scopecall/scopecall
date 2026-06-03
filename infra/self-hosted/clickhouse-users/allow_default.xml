@@ -1,0 +1,10 @@
+<!-- Allow the default user to connect from any host in the Docker network -->
+<clickhouse>
+  <users>
+    <default>
+      <networks>
+        <ip>::/0</ip>
+      </networks>
+    </default>
+  </users>
+</clickhouse>

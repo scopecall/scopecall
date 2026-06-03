@@ -1,0 +1,27 @@
+[package]
+name    = "ingest"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "ingest"
+path = "src/main.rs"
+
+[dependencies]
+common              = { path = "../common" }
+axum                = { workspace = true }
+tokio               = { workspace = true }
+serde               = { workspace = true }
+serde_json          = { workspace = true }
+rskafka             = { workspace = true }
+sqlx                = { workspace = true }
+redis               = { workspace = true }
+thiserror           = { workspace = true }
+anyhow              = { workspace = true }
+tracing             = { workspace = true }
+tracing-subscriber  = { workspace = true }
+tower-http          = { workspace = true }
+uuid                = { workspace = true }
+sha2                = { workspace = true }
+hex                 = { workspace = true }
+chrono              = "0.4"

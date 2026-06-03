@@ -1,0 +1,8 @@
+# Keep the dashboard build context lean (context = services-dashboard/).
+# node_modules is reinstalled in the deps stage; .next is rebuilt.
+node_modules/
+.next/
+dist/
+.env.local
+.env*.local
+npm-debug.log*

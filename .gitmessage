@@ -1,0 +1,25 @@
+# <type>(<scope>): <subject>   ← 50-72 chars, imperative mood ("add" not "added")
+#
+# <body — why this change is needed, user-facing. No internal planning
+#  jargon: no phase numbers, no decision identifiers, no strategy terms,
+#  no private-doc references.>
+#
+# <footer — optional. Breaking changes, issue refs.>
+#
+# ── type ──────────────────────────────────────────────
+#   feat      new user-visible feature
+#   fix       bug fix
+#   perf      performance improvement
+#   refactor  code change, no behavior change
+#   docs      documentation only
+#   test      tests added/changed
+#   chore     build, tooling, dependencies
+#   ci        CI workflow changes
+#
+# ── scope (optional) ──────────────────────────────────
+#   sdk-ts, sdk-py, ingest, processor, api, dashboard, schemas, infra
+#
+# Examples:
+#   feat(sdk-ts): add Anthropic instrumentation
+#   fix(ingest): handle empty tool_calls array
+#   chore(deps): bump tokio to 1.40

@@ -1,0 +1,211 @@
+name: CI
+
+# Runs on every push and PR. Catches the kind of regressions the external
+# review found by hand: SDK contract drift, type errors in the dashboard,
+# Go build breakage from sqlc / oapi-codegen output, broken Rust compilation,
+# and migration syntax issues.
+#
+# Image publishing stays in publish-images.yml — that workflow runs only on
+# tags. This one runs on every change so the loop is tight.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  # Each ref gets its own queue; in-progress runs cancel when a new commit
+  # lands on the same branch so we don't burn minutes on stale code.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── TypeScript SDK ──────────────────────────────────────────────────────────
+  typescript-sdk:
+    name: TypeScript SDK
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sdks/typescript
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+          cache-dependency-path: sdks/typescript/pnpm-lock.yaml
+      - name: Install
+        # No frozen-lockfile flag: this package isn't part of a monorepo
+        # workspace; the lockfile may not exist on first contributors' PRs.
+        run: pnpm install
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Test
+        run: pnpm test
+      - name: Build
+        run: pnpm build
+
+  # ── Python SDK ──────────────────────────────────────────────────────────────
+  python-sdk:
+    # Matrix across the four supported Python versions. We don't run on
+    # 3.9 because we use PEP 604 union syntax (`str | None`) at module
+    # scope in a few places — supported on 3.10+. The lower bound is
+    # also documented in pyproject.toml's requires-python.
+    name: Python SDK (${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.11", "3.12", "3.13"]
+    defaults:
+      run:
+        working-directory: sdks/python
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          # No cache: pip — the deps are tiny (httpx + typing-extensions
+          # on the floor, pytest + ruff + mypy for dev) and the cache
+          # warm-up costs more than re-downloading.
+      - name: Install (editable + dev extras)
+        # Install the package in editable mode so `from scopecall import
+        # ...` works for tests, plus the dev extras for pytest / ruff / mypy.
+        run: |
+          python -m pip install -U pip
+          pip install -e ".[openai,anthropic,dev]"
+      - name: Lint (ruff)
+        run: ruff check scopecall tests
+      - name: Typecheck (mypy strict)
+        # mypy on the package only — tests use SimpleNamespace fakes
+        # that don't typecheck cleanly against the real openai /
+        # anthropic types, which is fine for tests but mypy doesn't
+        # know that.
+        run: mypy scopecall
+      - name: Test
+        run: pytest -q
+
+  # ── Python SDK packaging (build + twine check) ──────────────────────────────
+  # Runs only on the lowest supported Python — we just want to confirm
+  # that `pip install hatchling && python -m build` produces a valid
+  # wheel + sdist whose metadata passes twine's checks. Catches packaging
+  # regressions (missing files, malformed pyproject classifiers, etc.)
+  # before they reach PyPI.
+  python-sdk-package:
+    name: Python SDK package build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sdks/python
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Install build tools
+        run: |
+          python -m pip install -U pip
+          pip install build twine
+      - name: Build wheel + sdist
+        run: python -m build
+      - name: twine check
+        run: twine check dist/*
+
+  # ── Dashboard (Next.js) ─────────────────────────────────────────────────────
+  dashboard:
+    name: Dashboard
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services-dashboard
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+          cache-dependency-path: services-dashboard/pnpm-lock.yaml
+      - name: Install
+        run: pnpm install
+      - name: Typecheck
+        # `next build` runs tsc internally, but a standalone typecheck step
+        # surfaces type errors with a faster signal and shorter logs.
+        run: pnpm exec tsc --noEmit
+      - name: Lint
+        run: pnpm lint
+      - name: Build
+        # Authjs build args mirror publish-images.yml so the CI build path
+        # matches the self-hosted distribution path.
+        env:
+          NEXT_PUBLIC_AUTH_PROVIDER: authjs
+        run: pnpm build
+
+  # ── Go API ──────────────────────────────────────────────────────────────────
+  go-api:
+    name: Go API
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services-go/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          # go.mod pins 1.26.x — keep CI in sync. If go.mod moves, bump this.
+          go-version: "1.26"
+          cache-dependency-path: services-go/api/go.sum
+      - name: Vet
+        run: go vet ./...
+      - name: Build
+        run: go build ./...
+      - name: Test
+        run: go test ./...
+
+  # ── Rust services ───────────────────────────────────────────────────────────
+  rust:
+    name: Rust (ingest + processor)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services-rust
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt,clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: services-rust
+      - name: Fmt
+        run: cargo fmt --all -- --check
+      - name: Clippy
+        # -D warnings keeps clippy honest; the codebase is small enough today
+        # that warning-free is achievable. If a lint becomes truly contentious,
+        # add a targeted #[allow(...)] with a comment, not a blanket -A here.
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Test
+        run: cargo test --workspace
+
+  # ── Compose validation ──────────────────────────────────────────────────────
+  compose:
+    name: Compose config
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate self-hosted compose
+        # `docker compose config` parses the file and resolves variables.
+        # Catches YAML quoting hazards, undefined service references, and
+        # the kind of "service_completed_successfully on a non-existent
+        # service" bug that's easy to introduce by hand.
+        env:
+          INTERNAL_API_KEY: ci-fake-key
+          AUTH_SECRET: ci-fake-secret
+        run: docker compose -f infra/docker-compose.yml config > /dev/null
+      - name: Validate dev compose
+        run: docker compose -f infra/docker-compose.dev.yml config > /dev/null

@@ -1,0 +1,111 @@
+version: "3.9"
+
+# Local dev stack: Redpanda + ClickHouse + Postgres + Redis
+# Usage: docker compose -f infra/docker-compose.dev.yml up -d
+
+services:
+  # ── Redpanda (Kafka-compatible) ──────────────────────────────────────────────
+  redpanda:
+    image: redpandadata/redpanda:v23.3.21
+    container_name: scopecall-redpanda
+    command:
+      - redpanda
+      - start
+      - --smp 1
+      - --overprovisioned
+      - --node-id 0
+      - --kafka-addr PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr PLAINTEXT://localhost:9092
+      - --pandaproxy-addr 0.0.0.0:8082
+      - --advertise-pandaproxy-addr localhost:8082
+    ports:
+      - "9092:9092"    # Kafka API
+      - "8082:8082"    # Pandaproxy REST
+      - "9644:9644"    # Admin API
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -q 'Healthy:.*true'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ── ClickHouse ───────────────────────────────────────────────────────────────
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.3
+    container_name: scopecall-clickhouse
+    ports:
+      - "8123:8123"    # HTTP interface
+      - "9000:9000"    # Native TCP
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+      # Mount ALL migrations on first init — symmetric with the production
+      # compose. Round-3 reviewer flagged the dev compose was still 001-only.
+      - ../schemas/clickhouse/001_initial.sql:/docker-entrypoint-initdb.d/001_initial.sql:ro
+      - ../schemas/clickhouse/002_trace_id_skip_index.sql:/docker-entrypoint-initdb.d/002_trace_id_skip_index.sql:ro
+      - ../schemas/clickhouse/003_prompt_version.sql:/docker-entrypoint-initdb.d/003_prompt_version.sql:ro
+      - ../schemas/clickhouse/004_span_kind.sql:/docker-entrypoint-initdb.d/004_span_kind.sql:ro
+      - ../schemas/clickhouse/005_kind_aware_rollup.sql:/docker-entrypoint-initdb.d/005_kind_aware_rollup.sql:ro
+    environment:
+      CLICKHOUSE_DB: default
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: ""
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8123/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ── ClickHouse migration runner ──────────────────────────────────────────────
+  #
+  # Same idempotent runner the prod compose uses. /docker-entrypoint-initdb.d
+  # only fires on first init of an empty volume — once a dev has a populated
+  # clickhouse-data volume, new migrations never reach them unless they wipe
+  # the volume. The runner closes that gap by re-applying every .sql in
+  # /migrations on every `docker compose up`. Migrations are idempotent
+  # (IF NOT EXISTS / DROP+CREATE for views).
+  clickhouse-migrate:
+    image: clickhouse/clickhouse-server:24.3
+    container_name: scopecall-ch-migrate
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    volumes:
+      - ../schemas/clickhouse:/migrations:ro
+      - ../scripts/run-ch-migrations.sh:/run-migrations.sh:ro
+    entrypoint: ["/bin/sh", "/run-migrations.sh"]
+    restart: "no"
+
+  # ── Postgres ─────────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16
+    container_name: scopecall-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: scopecall
+      POSTGRES_PASSWORD: scopecall
+      POSTGRES_DB: scopecall
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./dev-seed/postgres-init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      - ./dev-seed/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scopecall"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ── Redis ────────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: scopecall-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  clickhouse-data:
+  postgres-data:

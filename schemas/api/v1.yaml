@@ -1,0 +1,975 @@
+openapi: "3.1.0"
+info:
+  title: ScopeCall Query API
+  version: "1.0.0"
+  description: |
+    Read-only observability query API for the ScopeCall dashboard.
+    All endpoints require authentication via a Supabase-issued JWT or an API key.
+    Timestamps must be absolute ISO8601 (RFC3339); relative values like "now-24h" are rejected with 400.
+
+servers:
+  - url: https://api.scopecall.ai
+    description: Production
+  - url: http://localhost:3004
+    description: Local dev
+
+security:
+  - BearerAuth: []
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: |
+        Supabase-issued JWT (eyJ...) or API key (sc_live_... / sc_test_...).
+        Dispatched by prefix. Single Authorization: Bearer header.
+
+  parameters:
+    OrgId:
+      name: org_id
+      in: query
+      required: true
+      schema:
+        type: string
+      description: Organization ID. Must match the org_id in the authenticated token.
+    From:
+      name: from
+      in: query
+      required: true
+      schema:
+        type: string
+        format: date-time
+      description: >
+        Absolute ISO8601 timestamp (e.g. 2026-05-01T00:00:00Z).
+        Relative values (now-24h) are rejected with 400.
+    To:
+      name: to
+      in: query
+      required: true
+      schema:
+        type: string
+        format: date-time
+      description: >
+        Absolute ISO8601 timestamp (e.g. 2026-05-22T00:00:00Z).
+        Must be after 'from'.
+    Granularity:
+      name: granularity
+      in: query
+      required: false
+      schema:
+        type: string
+        enum: [hour, day]
+        default: hour
+    GroupBy:
+      name: group_by
+      in: query
+      required: false
+      schema:
+        type: string
+        enum: [model, provider, feature, user, environment]
+        default: model
+      description: >
+        Dimension to aggregate cost and calls by. model/provider/feature read the
+        pre-aggregated hourly rollup; user/environment scan raw calls over the window.
+
+  schemas:
+    Problem:
+      type: object
+      required: [type, title, status, detail]
+      properties:
+        type:
+          type: string
+          example: "about:blank"
+        title:
+          type: string
+          example: "Bad Request"
+        status:
+          type: integer
+          example: 400
+        detail:
+          type: string
+          example: "parameter 'from' must be an absolute ISO8601 timestamp"
+
+    OverviewResponse:
+      type: object
+      required: [total_calls, total_cost_usd, avg_latency_ms, p99_latency_ms, error_rate_pct, unique_traces]
+      properties:
+        total_calls:
+          type: integer
+        total_cost_usd:
+          type: number
+          format: double
+        avg_latency_ms:
+          type: number
+          format: double
+        p99_latency_ms:
+          type: number
+          format: double
+        error_rate_pct:
+          type: number
+          format: double
+          description: 0–100
+        unique_traces:
+          type: integer
+
+    Trace:
+      type: object
+      required:
+        - org_id
+        - trace_id
+        - span_id
+        - timestamp
+        - model
+        - provider
+        - input_tokens
+        - output_tokens
+        - cost_usd
+        - latency_ms
+        - status
+        - environment
+      properties:
+        org_id:
+          type: string
+        trace_id:
+          type: string
+        span_id:
+          type: string
+        parent_span_id:
+          type: string
+          nullable: true
+        timestamp:
+          type: string
+          format: date-time
+        model:
+          type: string
+        provider:
+          type: string
+        input_tokens:
+          type: integer
+        output_tokens:
+          type: integer
+        cost_usd:
+          type: number
+          format: double
+        input_cost_usd:
+          type: number
+          format: double
+          description: >
+            Cost attributed to input tokens (computed at ingest from per-model
+            pricing). Optional — only populated on endpoints whose backend has
+            been updated; legacy responses may omit it.
+        output_cost_usd:
+          type: number
+          format: double
+          description: Cost attributed to output tokens. See input_cost_usd.
+        latency_ms:
+          type: integer
+        ttft_ms:
+          type: integer
+          nullable: true
+        status:
+          type: string
+          enum: [success, error, timeout, rate_limited]
+        error_message:
+          type: string
+          nullable: true
+        input_text:
+          type: string
+          description: Empty string for viewer role
+          nullable: true
+        output_text:
+          type: string
+          description: Empty string for viewer role
+          nullable: true
+        feature_name:
+          type: string
+          nullable: true
+        user_id:
+          type: string
+          nullable: true
+        session_id:
+          type: string
+          nullable: true
+        environment:
+          type: string
+        sdk_version:
+          type: string
+          nullable: true
+        extra:
+          type: string
+          nullable: true
+        prompt_version:
+          type: string
+          nullable: true
+          description: >
+            Operator-supplied prompt iteration label. Set via
+            sdk.trace(name, fn, { promptVersion }) or via
+            ScopeCallConfig.defaultPromptVersion. Powers the Prompts page.
+        kind:
+          type: string
+          enum: [llm, workflow]
+          description: >
+            Span discriminator. `llm` is an instrumented provider call
+            (the default). `workflow` is the synthetic span emitted by
+            sdk.trace() so the trace tree has a real parent row.
+            Workflow rows have empty model/provider, zero tokens, zero
+            cost — see schemas/clickhouse/004_span_kind.sql.
+
+    TraceListResponse:
+      type: object
+      required: [traces]
+      properties:
+        traces:
+          type: array
+          items:
+            $ref: "#/components/schemas/Trace"
+        next_cursor:
+          type: string
+          nullable: true
+          description: Opaque cursor for the next page. Absent (or null) on the last page.
+
+    TraceTreeResponse:
+      type: object
+      required: [spans]
+      description: >
+        Every span belonging to a single trace_id, chronological. The shape of
+        each span mirrors the Trace schema. The frontend builds the tree
+        hierarchy locally from parent_span_id.
+      properties:
+        spans:
+          type: array
+          items:
+            $ref: "#/components/schemas/Trace"
+
+    MetricPoint:
+      type: object
+      required: [timestamp]
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        model:
+          type: string
+          nullable: true
+        call_count:
+          type: integer
+          nullable: true
+        total_cost_usd:
+          type: number
+          format: double
+          nullable: true
+        avg_latency_ms:
+          type: number
+          format: double
+          nullable: true
+        p99_latency_ms:
+          type: number
+          format: double
+          nullable: true
+        error_count:
+          type: integer
+          nullable: true
+
+    MetricsResponse:
+      type: object
+      required: [points]
+      properties:
+        points:
+          type: array
+          items:
+            $ref: "#/components/schemas/MetricPoint"
+
+    BreakdownRow:
+      type: object
+      required: [key, calls, total_cost_usd, avg_cost_per_call, error_count, pct_of_total]
+      properties:
+        key:
+          type: string
+          description: >
+            The dimension value (e.g. "gpt-4o"). Empty string denotes unattributed
+            calls — rendered as "(none)" in the UI.
+        key2:
+          type: string
+          description: Secondary-dimension value. Populated only when secondary_group_by is set.
+        calls:
+          type: integer
+        total_cost_usd:
+          type: number
+          format: double
+        avg_cost_per_call:
+          type: number
+          format: double
+        error_count:
+          type: integer
+        pct_of_total:
+          type: number
+          format: double
+          description: This group's share of total cost across all groups in the window (0–100).
+
+    BreakdownResponse:
+      type: object
+      required: [group_by, rows, total_cost_usd, total_calls]
+      properties:
+        group_by:
+          type: string
+        secondary_group_by:
+          type: string
+          description: Echoed when cross-dim mode was requested.
+        rows:
+          type: array
+          items:
+            $ref: "#/components/schemas/BreakdownRow"
+        total_cost_usd:
+          type: number
+          format: double
+          description: Total cost across all groups in the window (not just the returned rows).
+        total_calls:
+          type: integer
+
+    TopMoverRow:
+      type: object
+      required: [key, current_cost_usd, prior_cost_usd, delta_cost_usd, pct_change, current_calls, prior_calls, current_p99_ms, prior_p99_ms, delta_p99_ms]
+      properties:
+        key:
+          type: string
+        current_cost_usd:
+          type: number
+          format: double
+        prior_cost_usd:
+          type: number
+          format: double
+        delta_cost_usd:
+          type: number
+          format: double
+        pct_change:
+          type: number
+          format: double
+          description: >
+            Percent change vs prior period (0–N). Sentinel value `-1` means no prior
+            baseline (new dimension value this window) — retained for backward
+            compatibility. New clients should check `is_new` instead.
+        is_new:
+          type: boolean
+          description: >
+            True when this dimension value has no prior-period baseline (first
+            time seen in this window). Distinct from a real -1% delta.
+        current_calls:
+          type: integer
+        prior_calls:
+          type: integer
+        current_p99_ms:
+          type: number
+          format: double
+        prior_p99_ms:
+          type: number
+          format: double
+        delta_p99_ms:
+          type: number
+          format: double
+
+    TopMoversResponse:
+      type: object
+      required: [group_by, window_seconds, rows]
+      properties:
+        group_by:
+          type: string
+        window_seconds:
+          type: integer
+        rows:
+          type: array
+          items:
+            $ref: "#/components/schemas/TopMoverRow"
+
+    ErrorBucket:
+      type: object
+      required: [timestamp, error, timeout, rate_limited]
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        error:
+          type: integer
+        timeout:
+          type: integer
+        rate_limited:
+          type: integer
+
+    ErrorsByStatusResponse:
+      type: object
+      required: [points]
+      properties:
+        points:
+          type: array
+          items:
+            $ref: "#/components/schemas/ErrorBucket"
+
+    Session:
+      type: object
+      required: [session_id, call_count, total_cost_usd, error_count, first_at, last_at, duration_ms]
+      properties:
+        session_id:
+          type: string
+        user_id:
+          type: string
+          description: Any non-null user_id seen in the session; empty if all calls were unattributed.
+        call_count:
+          type: integer
+        total_cost_usd:
+          type: number
+          format: double
+        error_count:
+          type: integer
+        first_at:
+          type: string
+          format: date-time
+        last_at:
+          type: string
+          format: date-time
+        duration_ms:
+          type: integer
+          description: last_at − first_at in milliseconds.
+
+    SessionsResponse:
+      type: object
+      required: [sessions]
+      properties:
+        sessions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Session"
+
+    # PromptRow / PromptsResponse — surface for the Prompts page. One row per
+    # distinct prompt_version (or one untagged-bucket row keyed on ""). Defined
+    # here for TS client type safety; the Go handler hand-encodes JSON to
+    # match (services-go/api/internal/handler/prompts.go). Keep field names
+    # in lockstep.
+    PromptRow:
+      type: object
+      required:
+        - version
+        - calls
+        - total_cost_usd
+        - avg_cost_per_call
+        - p50_latency_ms
+        - p95_latency_ms
+        - avg_input_tokens
+        - avg_output_tokens
+        - error_count
+        - error_rate
+        - first_seen
+        - last_seen
+      properties:
+        version:
+          type: string
+          description: Prompt version label. Empty string = untagged bucket.
+        calls:
+          type: integer
+          minimum: 0
+        total_cost_usd:
+          type: number
+        avg_cost_per_call:
+          type: number
+        p50_latency_ms:
+          type: number
+        p95_latency_ms:
+          type: number
+        avg_input_tokens:
+          type: number
+        avg_output_tokens:
+          type: number
+        error_count:
+          type: integer
+          minimum: 0
+        error_rate:
+          type: number
+          minimum: 0
+          maximum: 1
+        first_seen:
+          type: string
+          format: date-time
+        last_seen:
+          type: string
+          format: date-time
+
+    PromptsResponse:
+      type: object
+      required: [rows]
+      properties:
+        rows:
+          type: array
+          items:
+            $ref: "#/components/schemas/PromptRow"
+
+    AlertListResponse:
+      type: object
+      required: [alerts, message]
+      properties:
+        alerts:
+          type: array
+          items: {}
+        message:
+          type: string
+
+  responses:
+    Problem400:
+      description: Bad request
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Problem401:
+      description: Unauthorized
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Problem403:
+      description: Forbidden
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Problem404:
+      description: Not found
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+
+paths:
+  /api/v1/overview:
+    get:
+      operationId: GetOverview
+      summary: Aggregate statistics for the time window
+      parameters:
+        - $ref: "#/components/parameters/OrgId"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+      responses:
+        "200":
+          description: Overview statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OverviewResponse"
+        "400":
+          $ref: "#/components/responses/Problem400"
+        "401":
+          $ref: "#/components/responses/Problem401"
+        "403":
+          $ref: "#/components/responses/Problem403"
+
+  /api/v1/traces:
+    get:
+      operationId: ListTraces
+      summary: Paginated trace list
+      parameters:
+        - $ref: "#/components/parameters/OrgId"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Opaque cursor from previous response's next_cursor field
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 100
+        - name: model
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [success, error, timeout, rate_limited]
+        - name: feature_name
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: provider
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: user_id
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: environment
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: prompt_version
+          in: query
+          required: false
+          schema:
+            type: string
+          description: >
+            Filter to one prompt version (set via sdk.trace(..., {promptVersion})
+            or ScopeCallConfig.defaultPromptVersion). Pass __null__ to show
+            untagged calls only — matches the Prompts page's "(untagged)" row.
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+          description: >
+            Free-text search. Exact-match on span_id / trace_id / session_id / user_id;
+            case-insensitive substring on input_text / output_text / error_message
+            (text-column matching skipped for viewer role).
+      responses:
+        "200":
+          description: Trace list with optional next_cursor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TraceListResponse"
+        "400":
+          $ref: "#/components/responses/Problem400"
+        "401":
+          $ref: "#/components/responses/Problem401"
+        "403":
+          $ref: "#/components/responses/Problem403"
+
+  /api/v1/traces/{span_id}:
+    get:
+      operationId: GetTrace
+      summary: Single trace by span_id
+      parameters:
+        - name: span_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: "#/components/parameters/OrgId"
+      responses:
+        "200":
+          description: Trace detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Trace"
+        "401":
+          $ref: "#/components/responses/Problem401"
+        "404":
+          $ref: "#/components/responses/Problem404"
+
+  /api/v1/metrics/cost:
+    get:
+      operationId: GetCostMetrics
+      summary: Cost metrics time series
+      parameters:
+        - $ref: "#/components/parameters/OrgId"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - $ref: "#/components/parameters/Granularity"
+      responses:
+        "200":
+          description: Cost metric points
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MetricsResponse"
+        "400":
+          $ref: "#/components/responses/Problem400"
+        "401":
+          $ref: "#/components/responses/Problem401"
+
+  /api/v1/metrics/latency:
+    get:
+      operationId: GetLatencyMetrics
+      summary: Latency metrics time series (avg + P99)
+      parameters:
+        - $ref: "#/components/parameters/OrgId"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - $ref: "#/components/parameters/Granularity"
+      responses:
+        "200":
+          description: Latency metric points
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MetricsResponse"
+        "400":
+          $ref: "#/components/responses/Problem400"
+        "401":
+          $ref: "#/components/responses/Problem401"
+
+  /api/v1/metrics/errors:
+    get:
+      operationId: GetErrorMetrics
+      summary: Error count time series
+      parameters:
+        - $ref: "#/components/parameters/OrgId"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - $ref: "#/components/parameters/Granularity"
+      responses:
+        "200":
+          description: Error metric points
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MetricsResponse"
+        "400":
+          $ref: "#/components/responses/Problem400"
+        "401":
+          $ref: "#/components/responses/Problem401"
+
+  /api/v1/traces/tree/{trace_id}:
+    get:
+      operationId: GetTraceTree
+      summary: All spans for a given trace_id (for the tree view)
+      parameters:
+        - name: trace_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: "#/components/parameters/OrgId"
+        - name: from
+          in: query
+          required: false
+          description: >
+            Optional time window hint. When provided alongside `to`, narrows the
+            ClickHouse partition scan to that window. Skipping this triggers a
+            cheap min/max probe to bound the scan automatically. Pass the date
+            range the user was on when they navigated to this trace.
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+      responses:
+        "200":
+          description: All spans for the trace, ordered by timestamp ascending
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TraceTreeResponse"
+        "401":
+          $ref: "#/components/responses/Problem401"
+        "403":
+          $ref: "#/components/responses/Problem403"
+        "404":
+          $ref: "#/components/responses/Problem404"
+
+  /api/v1/breakdown:
+    get:
+      operationId: GetBreakdown
+      summary: Cost and call breakdown grouped by a dimension
+      parameters:
+        - $ref: "#/components/parameters/OrgId"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - $ref: "#/components/parameters/GroupBy"
+        - name: secondary_group_by
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [model, provider, feature, user, environment]
+          description: >
+            When set, cross-dimensional mode — returns one row per
+            (group_by × secondary_group_by) combination. Always reads raw
+            llm_calls (rollup lacks user/env columns).
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+          description: Max groups to return (sorted by cost descending).
+      responses:
+        "200":
+          description: Breakdown rows sorted by cost descending
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BreakdownResponse"
+        "400":
+          $ref: "#/components/responses/Problem400"
+        "401":
+          $ref: "#/components/responses/Problem401"
+        "403":
+          $ref: "#/components/responses/Problem403"
+
+  /api/v1/metrics/top-movers:
+    get:
+      operationId: GetTopMovers
+      summary: Period-over-period change per dimension value
+      parameters:
+        - $ref: "#/components/parameters/OrgId"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - $ref: "#/components/parameters/GroupBy"
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+      responses:
+        "200":
+          description: Dimension values ordered by absolute cost delta descending
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TopMoversResponse"
+        "400":
+          $ref: "#/components/responses/Problem400"
+        "401":
+          $ref: "#/components/responses/Problem401"
+        "403":
+          $ref: "#/components/responses/Problem403"
+
+  /api/v1/metrics/errors-by-status:
+    get:
+      operationId: GetErrorsByStatus
+      summary: Bucketed failure counts broken by status (error / timeout / rate_limited)
+      parameters:
+        - $ref: "#/components/parameters/OrgId"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - $ref: "#/components/parameters/Granularity"
+      responses:
+        "200":
+          description: Per-hour failure breakdown
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorsByStatusResponse"
+        "400":
+          $ref: "#/components/responses/Problem400"
+        "401":
+          $ref: "#/components/responses/Problem401"
+        "403":
+          $ref: "#/components/responses/Problem403"
+
+  /api/v1/sessions:
+    get:
+      operationId: ListSessions
+      summary: Calls grouped by session_id, sorted by recency
+      parameters:
+        - $ref: "#/components/parameters/OrgId"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - name: user_id
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Scope to a single end-user. Equivalent to a server-side filter.
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 100
+      responses:
+        "200":
+          description: Session summaries
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionsResponse"
+        "400":
+          $ref: "#/components/responses/Problem400"
+        "401":
+          $ref: "#/components/responses/Problem401"
+        "403":
+          $ref: "#/components/responses/Problem403"
+
+  /api/v1/prompts:
+    get:
+      operationId: ListPrompts
+      summary: Calls aggregated by prompt_version label
+      description: >
+        Powers the Prompts page. One row per distinct prompt_version (set
+        via sdk.trace(name, fn, { promptVersion }) or
+        ScopeCallConfig.defaultPromptVersion). Untagged calls collapse to
+        the empty-string version bucket.
+      parameters:
+        - $ref: "#/components/parameters/OrgId"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - name: feature_name
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Scope to one feature's prompt versions only.
+        - name: environment
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Scope to one environment.
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 200
+      responses:
+        "200":
+          description: Prompt-version aggregates sorted by cost descending
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromptsResponse"
+        "400":
+          $ref: "#/components/responses/Problem400"
+        "401":
+          $ref: "#/components/responses/Problem401"
+        "403":
+          $ref: "#/components/responses/Problem403"
+
+  /api/v1/alerts:
+    get:
+      operationId: ListAlerts
+      summary: List alert events (back-compat alias for /api/v1/alerts/events)
+      description: |
+        Returns recent alert events for the org. Maintained as a stable alias
+        for older dashboard versions; new clients should use
+        /api/v1/alerts/events directly. The full alerts surface (rules CRUD,
+        events feed, evaluator) lives under /api/v1/alerts/rules and
+        /api/v1/alerts/events — see those operations for the current shape.
+      parameters:
+        - $ref: "#/components/parameters/OrgId"
+      responses:
+        "200":
+          description: Alert event list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertListResponse"
+        "401":
+          $ref: "#/components/responses/Problem401"

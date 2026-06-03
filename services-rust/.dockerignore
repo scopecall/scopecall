@@ -1,0 +1,3 @@
+# Keep the ingest build context lean (context = services-rust/).
+target/
+**/*.rs.bk

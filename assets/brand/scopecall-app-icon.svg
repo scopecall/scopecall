@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" role="img" aria-label="ScopeCall">
+  <defs><linearGradient id="grad" gradientUnits="userSpaceOnUse" x1="120" y1="22" x2="120" y2="218"><stop offset="0" stop-color="#2563EB"/><stop offset="0.5" stop-color="#5B54E8"/><stop offset="1" stop-color="#8B5CF6"/></linearGradient></defs>
+  <rect x="8" y="8" width="224" height="224" rx="52" fill="#08080C"/>
+  <circle cx="157.82" cy="90.45" r="5.60" fill="url(#grad)"/>
+  <circle cx="142.78" cy="77.75" r="5.60" fill="url(#grad)"/>
+  <circle cx="123.91" cy="72.16" r="5.60" fill="url(#grad)"/>
+  <circle cx="104.37" cy="74.62" r="5.60" fill="url(#grad)"/>
+  <circle cx="87.47" cy="84.71" r="5.60" fill="url(#grad)"/>
+  <circle cx="76.04" cy="100.73" r="5.60" fill="url(#grad)"/>
+  <circle cx="72.00" cy="120.00" r="5.60" fill="url(#grad)"/>
+  <circle cx="76.04" cy="139.27" r="5.60" fill="url(#grad)"/>
+  <circle cx="87.47" cy="155.29" r="5.60" fill="url(#grad)"/>
+  <circle cx="104.37" cy="165.38" r="5.60" fill="url(#grad)"/>
+  <circle cx="123.91" cy="167.84" r="5.60" fill="url(#grad)"/>
+  <circle cx="142.78" cy="162.25" r="5.60" fill="url(#grad)"/>
+  <circle cx="157.82" cy="149.55" r="5.60" fill="url(#grad)"/>
+  <circle cx="175.16" cy="76.90" r="4.00" fill="url(#grad)"/>
+  <circle cx="159.40" cy="62.14" r="4.00" fill="url(#grad)"/>
+  <circle cx="139.88" cy="52.88" r="4.00" fill="url(#grad)"/>
+  <circle cx="118.47" cy="50.02" r="4.00" fill="url(#grad)"/>
+  <circle cx="97.21" cy="53.81" r="4.00" fill="url(#grad)"/>
+  <circle cx="78.12" cy="63.91" r="4.00" fill="url(#grad)"/>
+  <circle cx="63.01" cy="79.35" r="4.00" fill="url(#grad)"/>
+  <circle cx="53.33" cy="98.66" r="4.00" fill="url(#grad)"/>
+  <circle cx="50.00" cy="120.00" r="4.00" fill="url(#grad)"/>
+  <circle cx="53.33" cy="141.34" r="4.00" fill="url(#grad)"/>
+  <circle cx="63.01" cy="160.65" r="4.00" fill="url(#grad)"/>
+  <circle cx="78.12" cy="176.09" r="4.00" fill="url(#grad)"/>
+  <circle cx="97.21" cy="186.19" r="4.00" fill="url(#grad)"/>
+  <circle cx="118.47" cy="189.98" r="4.00" fill="url(#grad)"/>
+  <circle cx="139.88" cy="187.12" r="4.00" fill="url(#grad)"/>
+  <circle cx="159.40" cy="177.86" r="4.00" fill="url(#grad)"/>
+  <circle cx="175.16" cy="163.10" r="4.00" fill="url(#grad)"/>
+  <circle cx="192.50" cy="63.36" r="2.70" fill="url(#grad)"/>
+  <circle cx="176.39" cy="47.31" r="2.70" fill="url(#grad)"/>
+  <circle cx="156.83" cy="35.69" r="2.70" fill="url(#grad)"/>
+  <circle cx="135.03" cy="29.24" r="2.70" fill="url(#grad)"/>
+  <circle cx="112.30" cy="28.32" r="2.70" fill="url(#grad)"/>
+  <circle cx="90.05" cy="33.01" r="2.70" fill="url(#grad)"/>
+  <circle cx="69.62" cy="43.02" r="2.70" fill="url(#grad)"/>
+  <circle cx="52.28" cy="57.73" r="2.70" fill="url(#grad)"/>
+  <circle cx="39.07" cy="76.24" r="2.70" fill="url(#grad)"/>
+  <circle cx="30.81" cy="97.43" r="2.70" fill="url(#grad)"/>
+  <circle cx="28.00" cy="120.00" r="2.70" fill="url(#grad)"/>
+  <circle cx="30.81" cy="142.57" r="2.70" fill="url(#grad)"/>
+  <circle cx="39.07" cy="163.76" r="2.70" fill="url(#grad)"/>
+  <circle cx="52.28" cy="182.27" r="2.70" fill="url(#grad)"/>
+  <circle cx="69.62" cy="196.98" r="2.70" fill="url(#grad)"/>
+  <circle cx="90.05" cy="206.99" r="2.70" fill="url(#grad)"/>
+  <circle cx="112.30" cy="211.68" r="2.70" fill="url(#grad)"/>
+  <circle cx="135.03" cy="210.76" r="2.70" fill="url(#grad)"/>
+  <circle cx="156.83" cy="204.31" r="2.70" fill="url(#grad)"/>
+  <circle cx="176.39" cy="192.69" r="2.70" fill="url(#grad)"/>
+  <circle cx="192.50" cy="176.64" r="2.70" fill="url(#grad)"/>
+  <rect x="43.00" y="115.25" width="26.00" height="9.50" rx="4.75" ry="4.75" fill="url(#grad)"/>
+  <rect x="93.00" y="170.50" width="18.00" height="7.00" rx="3.50" ry="3.50" fill="url(#grad)"/>
+</svg>

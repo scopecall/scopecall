@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1254" height="1254" viewBox="0 0 1254 1254" fill="none">
+  <defs>
+    <filter id="softGlow" x="-35%" y="-35%" width="170%" height="170%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="2.6" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0.55 0" result="glow"/>
+      <feMerge>
+        <feMergeNode in="glow"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <linearGradient id="pillGradient" x1="293" y1="586" x2="497" y2="586" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#703ff3"/>
+      <stop offset="1" stop-color="#6640f5"/>
+    </linearGradient>
+  </defs>
+  <!-- White rounded-square background. rx=260 (≈21% of 1254) matches the
+       proportional corner radius of the brand app-icon (rx=52 on 240px). -->
+  <rect x="0" y="0" width="1254" height="1254" rx="260" fill="#ffffff"/>
+  <g filter="url(#softGlow)">
+    <circle cx="984.9" cy="267.4" r="17.2" fill="#0268e9"/>
+    <circle cx="984.8" cy="907.6" r="17.2" fill="#7130e9"/>
+    <circle cx="913.5" cy="204.5" r="22.8" fill="#016aef"/>
+    <circle cx="908.6" cy="965.9" r="22.8" fill="#7932ee"/>
+    <circle cx="827.4" cy="1007.7" r="25.2" fill="#7b32f0"/>
+    <circle cx="833.0" cy="163.2" r="26.2" fill="#016bef"/>
+    <circle cx="908.0" cy="831.3" r="26.2" fill="#6d39f0"/>
+    <circle cx="907.7" cy="336.7" r="26.5" fill="#0a66f1"/>
+    <circle cx="740.2" cy="142.0" r="27.5" fill="#016bf1"/>
+    <circle cx="730.4" cy="1034.1" r="27.8" fill="#7e31f1"/>
+    <circle cx="615.6" cy="1036.9" r="30.0" fill="#7f31f1"/>
+    <circle cx="501.7" cy="1011.1" r="29.8" fill="#8031f2"/>
+    <circle cx="826.4" cy="892.0" r="30.8" fill="#7435f1"/>
+    <circle cx="641.4" cy="136.4" r="31.0" fill="#016bf3"/>
+    <circle cx="823.5" cy="276.8" r="31.8" fill="#0869f2"/>
+    <circle cx="290.7" cy="841.3" r="32.0" fill="#7b33f2"/>
+    <circle cx="526.0" cy="162.5" r="32.2" fill="#0768f3"/>
+    <circle cx="405.0" cy="218.3" r="32.8" fill="#245cf2"/>
+    <circle cx="818.1" cy="753.9" r="32.5" fill="#653df3"/>
+    <circle cx="390.3" cy="950.0" r="32.8" fill="#8031f2"/>
+    <circle cx="231.1" cy="711.9" r="33.2" fill="#7433f2"/>
+    <circle cx="826.3" cy="413.2" r="33.2" fill="#265df2"/>
+    <circle cx="726.5" cy="924.1" r="33.2" fill="#7934f3"/>
+    <circle cx="238.5" cy="448.5" r="34.0" fill="#5c3ef1"/>
+    <circle cx="302.6" cy="326.1" r="34.2" fill="#454cf3"/>
+    <circle cx="718.6" cy="245.6" r="35.0" fill="#0968f3"/>
+    <circle cx="402.5" cy="807.3" r="35.0" fill="#7634f3"/>
+    <circle cx="347.5" cy="703.6" r="35.0" fill="#7035f3"/>
+    <circle cx="350.7" cy="468.3" r="36.0" fill="#5841f3"/>
+    <circle cx="411.6" cy="363.3" r="37.0" fill="#404ff3"/>
+    <circle cx="737.0" cy="800.3" r="37.5" fill="#6d39f3"/>
+    <circle cx="747.0" cy="370.2" r="37.5" fill="#2360f4"/>
+    <circle cx="479.9" cy="883.6" r="38.2" fill="#7933f3"/>
+    <circle cx="603.0" cy="924.1" r="38.5" fill="#7c34f4"/>
+    <circle cx="602.3" cy="255.4" r="38.8" fill="#1366f4"/>
+    <circle cx="496.6" cy="296.6" r="39.0" fill="#2a5bf4"/>
+    <circle cx="467.8" cy="698.1" r="39.0" fill="#6b39f3"/>
+    <circle cx="223.0" cy="585.6" r="39.2" fill="#6d36f3"/>
+    <circle cx="472.4" cy="473.6" r="39.0" fill="#5146f3"/>
+    <circle cx="639.7" cy="808.3" r="39.5" fill="#7138f3"/>
+    <circle cx="543.2" cy="773.4" r="40.0" fill="#7137f4"/>
+    <circle cx="649.6" cy="364.7" r="40.0" fill="#2a5bf5"/>
+    <circle cx="549.4" cy="400.1" r="41.2" fill="#3c52f3"/>
+    <rect x="293.0" y="552.0" width="204.0" height="68.0" rx="34.0" fill="url(#pillGradient)"/>
+  </g>
+</svg>

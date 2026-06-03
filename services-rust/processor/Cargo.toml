@@ -1,0 +1,40 @@
+[package]
+name    = "processor"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "processor"
+path = "src/main.rs"
+
+# Library target exposes modules for integration tests.
+# The binary is the deployment artifact; the lib is for testability.
+[lib]
+name = "processor"
+path = "src/lib.rs"
+
+[dependencies]
+common              = { path = "../common" }
+tokio               = { workspace = true }
+serde               = { workspace = true }
+serde_json          = { workspace = true }
+rskafka             = { workspace = true }
+clickhouse          = { workspace = true }
+thiserror           = { workspace = true }
+anyhow              = { workspace = true }
+tracing             = { workspace = true }
+tracing-subscriber  = { workspace = true }
+uuid                = { workspace = true }
+regex               = "1"
+serde_yaml          = "0.9"
+time                = { version = "0.3", features = ["serde"] }
+futures             = "0.3"
+chrono              = { version = "0.4", features = ["serde"] }
+
+[dev-dependencies]
+# Integration tests — require Docker. Run with:
+#   cargo test --test integration_test -- --include-ignored
+# or explicitly: cargo test --test integration_test ch_writer_roundtrip -- --ignored
+testcontainers      = "0.23"
+reqwest             = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+tokio               = { version = "1", features = ["full"] }

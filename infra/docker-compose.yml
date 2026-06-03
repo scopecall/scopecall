@@ -1,0 +1,286 @@
+# ─── ScopeCall Self-Hosted Stack ──────────────────────────────────────────────
+#
+# Quick start (first time):
+#   cp infra/.env.example infra/.env   # fill in AUTH_SECRET and INTERNAL_API_KEY
+#   docker compose -f infra/docker-compose.yml pull
+#   docker compose -f infra/docker-compose.yml up -d
+#   open http://localhost:3000/setup    # create admin account
+#
+# Minimum requirements: 4 vCPU / 8 GB RAM / 50 GB disk
+#
+# Environment variables — set in infra/.env (see infra/.env.example):
+#   AUTH_SECRET        — required; 32+ random bytes for JWT signing
+#   INTERNAL_API_KEY   — required; shared secret between dashboard and API service
+#   POSTGRES_PASSWORD  — optional; defaults to "scopecall" (change for production)
+#   SCOPECALL_VERSION  — optional; image tag, defaults to "latest"
+#
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ── Infrastructure ───────────────────────────────────────────────────────────
+
+  redpanda:
+    image: redpandadata/redpanda:v23.3.21
+    container_name: scopecall-redpanda
+    command:
+      - redpanda
+      - start
+      - --smp 1
+      - --overprovisioned
+      - --node-id 0
+      - --kafka-addr PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr PLAINTEXT://redpanda:9092
+      - --pandaproxy-addr 0.0.0.0:8082
+      - --advertise-pandaproxy-addr localhost:8082
+    volumes:
+      - redpanda-data:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -q 'Healthy:.*true'"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 20s
+    restart: unless-stopped
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.3
+    container_name: scopecall-clickhouse
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+      # ClickHouse runs every .sql under /docker-entrypoint-initdb.d/ in
+      # alphabetical order on first init (not on container restart). Mount
+      # ALL migrations so a fresh install ends up with the same schema as
+      # an upgraded one. Adding a migration here is mandatory whenever
+      # processor/writer.rs grows a new column — otherwise the processor
+      # tries to insert into a column that doesn't exist on fresh installs
+      # and every event 400s silently. (Round-2 external-review P0.)
+      - ../schemas/clickhouse/001_initial.sql:/docker-entrypoint-initdb.d/001_initial.sql:ro
+      - ../schemas/clickhouse/002_trace_id_skip_index.sql:/docker-entrypoint-initdb.d/002_trace_id_skip_index.sql:ro
+      - ../schemas/clickhouse/003_prompt_version.sql:/docker-entrypoint-initdb.d/003_prompt_version.sql:ro
+      - ../schemas/clickhouse/004_span_kind.sql:/docker-entrypoint-initdb.d/004_span_kind.sql:ro
+      - ../schemas/clickhouse/005_kind_aware_rollup.sql:/docker-entrypoint-initdb.d/005_kind_aware_rollup.sql:ro
+      # Allow the default user to connect from Docker-internal IPs
+      - ./self-hosted/clickhouse-users/allow_default.xml:/etc/clickhouse-server/users.d/allow_default.xml:ro
+    environment:
+      CLICKHOUSE_DB: default
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: ""
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8123/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 10s
+    restart: unless-stopped
+
+  # One-shot ClickHouse migration runner.
+  #
+  # /docker-entrypoint-initdb.d only runs on FIRST init of an empty volume.
+  # Existing self-hosted operators with a populated clickhouse-data volume
+  # never see new migrations from the mounts above — that's how round-4
+  # review caught us shipping 003 + 004 + 005 with no upgrade path.
+  #
+  # This service runs every `docker compose up` and applies every .sql in
+  # /migrations in alphabetical order. All migrations are idempotent
+  # (IF NOT EXISTS / IF EXISTS / DROP+CREATE for views), so re-running
+  # on an already-migrated install is safe.
+  #
+  # restart: "no" — exit cleanly when done. Operators see the logs once
+  # via `docker logs scopecall-ch-migrate`. depends_on with healthy gate
+  # prevents the runner from trying to connect before CH is accepting
+  # queries.
+  clickhouse-migrate:
+    image: clickhouse/clickhouse-server:24.3
+    container_name: scopecall-ch-migrate
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    volumes:
+      - ../schemas/clickhouse:/migrations:ro
+      # Mount the runner script too. Keeping the loop in a real .sh file
+      # (not inline `command:`) sidesteps every YAML quoting hazard —
+      # folded vs literal, single vs double quotes, $$ escaping. Previous
+      # inline forms either failed (block scalar → argv list) or only
+      # worked by accident (folded scalar with literal outer quotes).
+      - ../scripts/run-ch-migrations.sh:/run-migrations.sh:ro
+    entrypoint: ["/bin/sh", "/run-migrations.sh"]
+    restart: "no"
+
+  postgres:
+    image: postgres:16
+    container_name: scopecall-postgres
+    environment:
+      POSTGRES_USER: scopecall
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-scopecall}
+      POSTGRES_DB: scopecall
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      # Schema-only init — no seed data, no hardcoded credentials
+      - ./self-hosted/postgres-init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scopecall -d scopecall"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: scopecall-redis
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  # ── ScopeCall Services ────────────────────────────────────────────────────────
+
+  ingest:
+    image: ghcr.io/scopecall/ingest:${SCOPECALL_VERSION:-latest}
+    container_name: scopecall-ingest
+    depends_on:
+      redpanda:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://scopecall:${POSTGRES_PASSWORD:-scopecall}@postgres:5432/scopecall
+      REDIS_URL: redis://redis:6379
+      KAFKA_BROKERS: redpanda:9092
+      # Default port in common/config.rs is 3002; override to match EXPOSE 8080
+      INGEST_PORT: "8080"
+      RUST_LOG: info
+    ports:
+      - "8080:8080"
+    healthcheck:
+      # distroless :debug images have busybox at /busybox/, not /bin/sh
+      test: ["CMD", "/busybox/wget", "-qO-", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+
+  processor:
+    image: ghcr.io/scopecall/processor:${SCOPECALL_VERSION:-latest}
+    container_name: scopecall-processor
+    depends_on:
+      redpanda:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      # CRITICAL: wait for ClickHouse migrations to finish before starting the
+      # writer. /docker-entrypoint-initdb.d only runs on a fresh volume, so on
+      # upgrade installs the runner is the only thing that adds new columns
+      # (kind, prompt_version, etc). Without this gate the processor races
+      # against the runner and tries to insert into columns that don't exist
+      # yet, dropping the first 30-60s of events after every upgrade.
+      # (Round-6 review P1.)
+      clickhouse-migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://scopecall:${POSTGRES_PASSWORD:-scopecall}@postgres:5432/scopecall
+      KAFKA_BROKERS: redpanda:9092
+      CLICKHOUSE_URL: http://clickhouse:8123
+      CLICKHOUSE_DB: default
+      REDIS_URL: redis://redis:6379
+      RUST_LOG: info
+      # Override the default ./data/processor.offset (relative to cwd /) so
+      # the offset file lands inside the persistent volume below. Without
+      # this, the durable-offset work added in v0.1.1 is defeated: a
+      # `docker compose up -d` with new images replaces the container and
+      # the writable-layer file goes with it — restart loses the backlog,
+      # exactly the failure mode the offset store was created to prevent.
+      PROCESSOR_OFFSET_FILE: /var/lib/scopecall/processor.offset
+    volumes:
+      - processor-data:/var/lib/scopecall
+    restart: unless-stopped
+
+  api:
+    image: ghcr.io/scopecall/api:${SCOPECALL_VERSION:-latest}
+    container_name: scopecall-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      # Same reason as on the processor: migrations must finish before the
+      # API starts reading or it can query views/columns that don't exist on
+      # an upgrade install. (Round-6 review P1.)
+      clickhouse-migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://scopecall:${POSTGRES_PASSWORD:-scopecall}@postgres:5432/scopecall
+      # Go API reads individual ClickHouse vars, not a DSN
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: "9000"
+      CLICKHOUSE_DATABASE: default
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: ""
+      # Go API's cache.New() takes host:port — NOT a redis:// URL
+      REDIS_URL: redis:6379
+      # Default port in main.go is 3004; override to match Dockerfile EXPOSE 8081
+      API_PORT: "8081"
+      INTERNAL_API_KEY: "${INTERNAL_API_KEY:?INTERNAL_API_KEY required - generate with: openssl rand -hex 32}"
+    ports:
+      - "8081:8081"
+    healthcheck:
+      # distroless :debug images have busybox at /busybox/, not /bin/sh
+      test: ["CMD", "/busybox/wget", "-qO-", "http://localhost:8081/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+
+  dashboard:
+    image: ghcr.io/scopecall/dashboard:${SCOPECALL_VERSION:-latest}
+    container_name: scopecall-dashboard
+    depends_on:
+      api:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      # Auth.js — required
+      AUTH_SECRET: "${AUTH_SECRET:?AUTH_SECRET is required - generate with: openssl rand -hex 32}"
+      AUTH_PROVIDER: authjs
+      # Internal service URLs — server-side only, never baked into the JS bundle
+      INTERNAL_API_URL: http://api:8081
+      INTERNAL_API_KEY: "${INTERNAL_API_KEY:?INTERNAL_API_KEY required - generate with: openssl rand -hex 32}"
+      # Database (for Auth.js session queries + first-run setup)
+      DATABASE_URL: postgres://scopecall:${POSTGRES_PASSWORD:-scopecall}@postgres:5432/scopecall
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+    healthcheck:
+      # node:20-slim has no wget/curl — use Node's built-in http module
+      test: ["CMD", "node", "-e",
+        "require('http').get('http://localhost:3000/api/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+
+# ── Named Volumes ─────────────────────────────────────────────────────────────
+volumes:
+  redpanda-data:
+  clickhouse-data:
+  postgres-data:
+  redis-data:
+  # Persistent home for the processor's durable Kafka offset (and any future
+  # per-instance state). Without this, the writable-layer file is destroyed
+  # on every container replacement.
+  processor-data:

@@ -1,0 +1,41 @@
+{
+  "_meta": {
+    "last_verified": "2026-05-25",
+    "note": "Single source of truth for token pricing. Update last_verified when refreshing. CI fails if > 30 days stale."
+  },
+  "models": {
+    "gpt-4o":               { "input_price_per_1k_tokens": 0.0025,   "output_price_per_1k_tokens": 0.01000 },
+    "gpt-4o-mini":          { "input_price_per_1k_tokens": 0.00015,  "output_price_per_1k_tokens": 0.00060 },
+    "gpt-4-turbo":          { "input_price_per_1k_tokens": 0.01000,  "output_price_per_1k_tokens": 0.03000 },
+    "gpt-4":                { "input_price_per_1k_tokens": 0.03000,  "output_price_per_1k_tokens": 0.06000 },
+    "gpt-3.5-turbo":        { "input_price_per_1k_tokens": 0.00050,  "output_price_per_1k_tokens": 0.00150 },
+    "claude-opus-4-7":          { "input_price_per_1k_tokens": 0.01500,  "output_price_per_1k_tokens": 0.07500 },
+    "claude-sonnet-4-6":        { "input_price_per_1k_tokens": 0.00300,  "output_price_per_1k_tokens": 0.01500 },
+    "claude-haiku-4-5":         { "input_price_per_1k_tokens": 0.00025,  "output_price_per_1k_tokens": 0.00125 },
+    "claude-3-5-sonnet":    { "input_price_per_1k_tokens": 0.00300,  "output_price_per_1k_tokens": 0.01500 },
+    "claude-3-5-haiku":     { "input_price_per_1k_tokens": 0.00025,  "output_price_per_1k_tokens": 0.00125 },
+    "claude-3-opus":        { "input_price_per_1k_tokens": 0.01500,  "output_price_per_1k_tokens": 0.07500 },
+    "claude-3-sonnet":      { "input_price_per_1k_tokens": 0.00300,  "output_price_per_1k_tokens": 0.01500 },
+    "claude-3-haiku":       { "input_price_per_1k_tokens": 0.00025,  "output_price_per_1k_tokens": 0.00125 },
+    "gemini-1.5-pro":       { "input_price_per_1k_tokens": 0.00125,  "output_price_per_1k_tokens": 0.00500 },
+    "gemini-1.5-flash":     { "input_price_per_1k_tokens": 0.000075, "output_price_per_1k_tokens": 0.00030 },
+    "gemini-2.0-flash":     { "input_price_per_1k_tokens": 0.00010,  "output_price_per_1k_tokens": 0.00040 }
+  },
+  "aliases": {
+    "gpt-4o-2024-11-20":            "gpt-4o",
+    "gpt-4o-2024-08-06":            "gpt-4o",
+    "gpt-4o-2024-05-13":            "gpt-4o",
+    "gpt-4o-mini-2024-07-18":       "gpt-4o-mini",
+    "gpt-4-turbo-2024-04-09":       "gpt-4-turbo",
+    "gpt-4-turbo-preview":          "gpt-4-turbo",
+    "gpt-3.5-turbo-0125":           "gpt-3.5-turbo",
+    "gpt-3.5-turbo-1106":           "gpt-3.5-turbo",
+    "claude-haiku-4-5-20251001":    "claude-haiku-4-5",
+    "claude-3-5-sonnet-20241022":   "claude-3-5-sonnet",
+    "claude-3-5-sonnet-20240620":   "claude-3-5-sonnet",
+    "claude-3-5-haiku-20241022":    "claude-3-5-haiku",
+    "claude-3-opus-20240229":       "claude-3-opus",
+    "claude-3-sonnet-20240229":     "claude-3-sonnet",
+    "claude-3-haiku-20240307":      "claude-3-haiku"
+  }
+}
