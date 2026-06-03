@@ -19,7 +19,6 @@ Covers both providers and both sync + async paths.
 
 from __future__ import annotations
 
-import asyncio
 import json
 import tempfile
 import time

@@ -2,7 +2,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context;
-use axum::{Router, routing::{get, post}};
+use axum::{
+    routing::{get, post},
+    Router,
+};
 use common::config::Config;
 use tower_http::timeout::TimeoutLayer;
 use tower_http::trace::TraceLayer;
@@ -29,8 +32,7 @@ async fn main() -> anyhow::Result<()> {
         .await
         .context("connecting to Postgres")?;
 
-    let redis = redis::Client::open(config.redis_url.as_str())
-        .context("opening Redis client")?;
+    let redis = redis::Client::open(config.redis_url.as_str()).context("opening Redis client")?;
 
     let producer = Arc::new(
         producer::KafkaProducer::new(&config.kafka_brokers, &config.kafka_topic)
@@ -39,7 +41,12 @@ async fn main() -> anyhow::Result<()> {
     );
 
     let port = config.ingest_port;
-    let state = Arc::new(AppState { config, pg, redis, producer });
+    let state = Arc::new(AppState {
+        config,
+        pg,
+        redis,
+        producer,
+    });
 
     let app = Router::new()
         .route("/health", get(routes::health::handler))
@@ -70,12 +77,14 @@ async fn shutdown_signal() {
 }
 
 fn init_tracing(format: &str) {
-    let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("info"));
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
 
     if format == "pretty" {
         tracing_subscriber::fmt().with_env_filter(filter).init();
     } else {
-        tracing_subscriber::fmt().json().with_env_filter(filter).init();
+        tracing_subscriber::fmt()
+            .json()
+            .with_env_filter(filter)
+            .init();
     }
 }

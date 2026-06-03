@@ -34,14 +34,15 @@ the child LLM span.
 from __future__ import annotations
 
 import os
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
 
-import scopecall
 from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
 from openai import AsyncOpenAI
 from pydantic import BaseModel
+
+import scopecall
 
 # Module-level handles, populated by `lifespan`. `cast`-like — typed as
 # the real types so route handlers below get autocomplete; the values
@@ -193,7 +194,7 @@ async def chat(req: ChatRequest):
                     # Mimic SSE framing so curl --no-buffer renders
                     # incremental output. Production should use proper
                     # SSE / WebSocket framing.
-                    yield f"data: {delta}\n\n".encode("utf-8")
+                    yield f"data: {delta}\n\n".encode()
             yield b"data: [DONE]\n\n"
 
     return StreamingResponse(event_source(), media_type="text/event-stream")

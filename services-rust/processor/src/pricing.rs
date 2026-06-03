@@ -94,8 +94,8 @@ impl Pricer {
     /// parse errors — which would be caught by the test suite, not at
     /// runtime, since the JSON is compile-time embedded.
     pub fn load() -> anyhow::Result<Self> {
-        let file: PricingFile = serde_json::from_str(PRICING_JSON)
-            .context("parsing embedded pricing.json")?;
+        let file: PricingFile =
+            serde_json::from_str(PRICING_JSON).context("parsing embedded pricing.json")?;
         Ok(Self {
             models: file.models,
             aliases: file.aliases,
@@ -130,22 +130,25 @@ impl Pricer {
                     );
                 }
             }
-            return Priced { canonical_model: canonical, costs: None };
+            return Priced {
+                canonical_model: canonical,
+                costs: None,
+            };
         };
 
-        let input_cost  = (input_tokens  as f64 / 1000.0) * p.input_price_per_1k_tokens;
+        let input_cost = (input_tokens as f64 / 1000.0) * p.input_price_per_1k_tokens;
         let output_cost = (output_tokens as f64 / 1000.0) * p.output_price_per_1k_tokens;
         // Round to 6 decimal places — matches the SDK's behaviour and is the
         // precision ClickHouse will return on aggregate queries.
         let round6 = |x: f64| (x * 1_000_000.0).round() / 1_000_000.0;
-        let input_cost  = round6(input_cost);
+        let input_cost = round6(input_cost);
         let output_cost = round6(output_cost);
         Priced {
             canonical_model: canonical,
             costs: Some(Costs {
-                input_cost_usd:  input_cost,
+                input_cost_usd: input_cost,
                 output_cost_usd: output_cost,
-                total_cost_usd:  round6(input_cost + output_cost),
+                total_cost_usd: round6(input_cost + output_cost),
             }),
         }
     }
@@ -155,7 +158,9 @@ impl Pricer {
 mod tests {
     use super::*;
 
-    fn p() -> Pricer { Pricer::load().expect("load pricing") }
+    fn p() -> Pricer {
+        Pricer::load().expect("load pricing")
+    }
 
     #[test]
     fn known_canonical_model() {
@@ -164,9 +169,21 @@ mod tests {
         assert_eq!(r.canonical_model, "gpt-4o");
         let c = r.costs.expect("priced");
         // gpt-4o: $0.0025/1k input, $0.01/1k output
-        assert!((c.input_cost_usd  - 0.0025).abs() < 1e-9, "input: {}", c.input_cost_usd);
-        assert!((c.output_cost_usd - 0.0100).abs() < 1e-9, "output: {}", c.output_cost_usd);
-        assert!((c.total_cost_usd  - 0.0125).abs() < 1e-9, "total: {}", c.total_cost_usd);
+        assert!(
+            (c.input_cost_usd - 0.0025).abs() < 1e-9,
+            "input: {}",
+            c.input_cost_usd
+        );
+        assert!(
+            (c.output_cost_usd - 0.0100).abs() < 1e-9,
+            "output: {}",
+            c.output_cost_usd
+        );
+        assert!(
+            (c.total_cost_usd - 0.0125).abs() < 1e-9,
+            "total: {}",
+            c.total_cost_usd
+        );
     }
 
     #[test]
@@ -184,8 +201,10 @@ mod tests {
         let r = pricer.price("gpt-99-future", 1000, 1000);
         // Canonical falls through to the original string when no alias matches.
         assert_eq!(r.canonical_model, "gpt-99-future");
-        assert!(r.costs.is_none(),
-            "unknown model must produce None so the enricher can preserve SDK cost as fallback");
+        assert!(
+            r.costs.is_none(),
+            "unknown model must produce None so the enricher can preserve SDK cost as fallback"
+        );
     }
 
     #[test]
@@ -196,7 +215,10 @@ mod tests {
         // documents that contract.
         let pricer = p();
         // gpt-4-turbo-2024-04-09 → gpt-4-turbo (one hop, gpt-4-turbo is canonical)
-        assert_eq!(pricer.resolve_model("gpt-4-turbo-2024-04-09"), "gpt-4-turbo");
+        assert_eq!(
+            pricer.resolve_model("gpt-4-turbo-2024-04-09"),
+            "gpt-4-turbo"
+        );
         // And gpt-4-turbo resolves to itself (no further alias).
         assert_eq!(pricer.resolve_model("gpt-4-turbo"), "gpt-4-turbo");
     }
@@ -223,8 +245,11 @@ mod tests {
         // f64 representation). The point of the test is that the result is
         // representable to 6 decimal places exactly.
         let scaled = c.input_cost_usd * 1_000_000.0;
-        assert!((scaled - scaled.round()).abs() < 1e-9,
-            "expected exactly 6 decimals, got {}", c.input_cost_usd);
+        assert!(
+            (scaled - scaled.round()).abs() < 1e-9,
+            "expected exactly 6 decimals, got {}",
+            c.input_cost_usd
+        );
     }
 
     #[test]

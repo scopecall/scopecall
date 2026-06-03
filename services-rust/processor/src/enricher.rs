@@ -40,7 +40,8 @@ pub struct Enricher {
 impl Enricher {
     /// Load from schemas/redaction/patterns.yaml; fall back to embedded copy.
     pub fn load() -> anyhow::Result<Self> {
-        let raw = fs::read_to_string(PATTERNS_PATH).unwrap_or_else(|_| PATTERNS_FALLBACK.to_owned());
+        let raw =
+            fs::read_to_string(PATTERNS_PATH).unwrap_or_else(|_| PATTERNS_FALLBACK.to_owned());
         let file: PatternsFile = serde_yaml::from_str(&raw).context("parsing patterns.yaml")?;
 
         // Build a map name → definition
@@ -56,8 +57,8 @@ impl Enricher {
             let def = defs
                 .get(name)
                 .with_context(|| format!("pattern {name} listed in order but not defined"))?;
-            let re = Regex::new(&def.regex)
-                .with_context(|| format!("compiling regex for {name}"))?;
+            let re =
+                Regex::new(&def.regex).with_context(|| format!("compiling regex for {name}"))?;
             patterns.push((name.clone(), re, format!("[{name}]")));
         }
 
@@ -118,8 +119,8 @@ impl Enricher {
         event.event.model = priced.canonical_model;
 
         if let Some(c) = priced.costs {
-            event.event.cost_usd        = c.total_cost_usd;
-            event.event.input_cost_usd  = Some(c.input_cost_usd);
+            event.event.cost_usd = c.total_cost_usd;
+            event.event.input_cost_usd = Some(c.input_cost_usd);
             event.event.output_cost_usd = Some(c.output_cost_usd);
         }
         // else: model unknown. Leave cost_usd as SDK supplied; components
@@ -148,7 +149,12 @@ mod tests {
         assert_eq!(enricher.redact(text), text);
     }
 
-    fn sample_event(model: &str, in_tok: u32, out_tok: u32, sdk_cost: f64) -> common::event::EnrichedEvent {
+    fn sample_event(
+        model: &str,
+        in_tok: u32,
+        out_tok: u32,
+        sdk_cost: f64,
+    ) -> common::event::EnrichedEvent {
         common::event::EnrichedEvent {
             org_id: "org_test".to_owned(),
             event: common::event::LlmEvent {
@@ -195,8 +201,12 @@ mod tests {
         let mut ev = sample_event("gpt-4o", 1000, 1000, 999.99);
         enricher.enrich(&mut ev);
         // gpt-4o: $0.0025 input + $0.01 output per 1k = $0.0125 for 1k+1k
-        assert!((ev.event.cost_usd - 0.0125).abs() < 1e-9, "cost: {}", ev.event.cost_usd);
-        assert_eq!(ev.event.input_cost_usd,  Some(0.0025));
+        assert!(
+            (ev.event.cost_usd - 0.0125).abs() < 1e-9,
+            "cost: {}",
+            ev.event.cost_usd
+        );
+        assert_eq!(ev.event.input_cost_usd, Some(0.0025));
         assert_eq!(ev.event.output_cost_usd, Some(0.0100));
     }
 
@@ -207,7 +217,10 @@ mod tests {
         let enricher = Enricher::load().expect("load");
         let mut ev = sample_event("gpt-4o-2024-11-20", 1000, 0, 0.0);
         enricher.enrich(&mut ev);
-        assert_eq!(ev.event.model, "gpt-4o", "model field should be canonicalised");
+        assert_eq!(
+            ev.event.model, "gpt-4o",
+            "model field should be canonicalised"
+        );
     }
 
     #[test]
@@ -243,7 +256,7 @@ mod tests {
         let mut ev = sample_event("o3-future-2099", 1000, 1000, 0.42);
         enricher.enrich(&mut ev);
         assert_eq!(ev.event.cost_usd, 0.42, "should fall back to SDK cost");
-        assert_eq!(ev.event.input_cost_usd,  None);
+        assert_eq!(ev.event.input_cost_usd, None);
         assert_eq!(ev.event.output_cost_usd, None);
     }
 }

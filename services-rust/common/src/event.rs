@@ -205,9 +205,12 @@ impl LlmEvent {
         // kind="workflow" with a real cost. (Round-4 review P1.)
         match self.kind.as_str() {
             "llm" | "workflow" => {}
-            other => return Err(ValidationError(format!(
-                "kind must be 'llm' or 'workflow', got {:?}", other,
-            ))),
+            other => {
+                return Err(ValidationError(format!(
+                    "kind must be 'llm' or 'workflow', got {:?}",
+                    other,
+                )))
+            }
         }
 
         // Tags
@@ -244,7 +247,8 @@ impl IngestBatch {
             )));
         }
         for (i, ev) in self.events.iter().enumerate() {
-            ev.validate().map_err(|e| ValidationError(format!("events[{}]: {}", i, e.0)))?;
+            ev.validate()
+                .map_err(|e| ValidationError(format!("events[{}]: {}", i, e.0)))?;
         }
         Ok(())
     }

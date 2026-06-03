@@ -8,8 +8,6 @@ tests need it.
 
 from __future__ import annotations
 
-from collections.abc import Iterator
-
 import pytest
 
 import scopecall

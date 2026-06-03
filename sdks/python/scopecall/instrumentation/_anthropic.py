@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import inspect
 import time
+from collections.abc import AsyncIterator, Iterator
 from typing import TYPE_CHECKING, Any
 
 from .. import _context
@@ -74,12 +75,12 @@ def instrument_anthropic(client: Any, sdk: ScopeCallSDK) -> None:
         async def wrapped_async(*args: Any, **kwargs: Any) -> Any:
             return await _traced_create_async(sdk, original_create, args, kwargs)
 
-        messages.create = wrapped_async  # type: ignore[method-assign]
+        messages.create = wrapped_async
     else:
         def wrapped_sync(*args: Any, **kwargs: Any) -> Any:
             return _traced_create_sync(sdk, original_create, args, kwargs)
 
-        messages.create = wrapped_sync  # type: ignore[method-assign]
+        messages.create = wrapped_sync
 
 
 # ─── Sync path ────────────────────────────────────────────────────────
@@ -88,8 +89,8 @@ def instrument_anthropic(client: Any, sdk: ScopeCallSDK) -> None:
 def _traced_create_sync(
     sdk: ScopeCallSDK,
     original_create: Any,
-    args: tuple,
-    kwargs: dict,
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
 ) -> Any:
     streaming = bool(kwargs.get("stream", False))
     # Snapshot the active trace context at create()-time. For streaming
@@ -121,11 +122,11 @@ def _traced_create_sync(
 def _wrap_stream_sync(
     stream: Any,
     sdk: ScopeCallSDK,
-    request_kwargs: dict,
+    request_kwargs: dict[str, Any],
     timestamp_ms: float,
     start_mono: float,
-    ctx_snapshot: object,
-):
+    ctx_snapshot: _context.TraceContext | None,
+) -> Iterator[Any]:
     """Sync iterator wrapper for Anthropic's event stream.
 
     Anthropic's stream yields typed event objects (MessageStartEvent,
@@ -195,8 +196,8 @@ def _wrap_stream_sync(
 async def _traced_create_async(
     sdk: ScopeCallSDK,
     original_create: Any,
-    args: tuple,
-    kwargs: dict,
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
 ) -> Any:
     streaming = bool(kwargs.get("stream", False))
     ctx_snapshot = _context.get_current()
@@ -223,11 +224,11 @@ async def _traced_create_async(
 async def _wrap_stream_async(
     stream: Any,
     sdk: ScopeCallSDK,
-    request_kwargs: dict,
+    request_kwargs: dict[str, Any],
     timestamp_ms: float,
     start_mono: float,
-    ctx_snapshot: object,
-):
+    ctx_snapshot: _context.TraceContext | None,
+) -> AsyncIterator[Any]:
     """Async iterator wrapper — parallel to the sync variant. See note in
     `_openai.py:_wrap_stream_async` about why we can't share code."""
     text_chunks: list[str] = []
@@ -288,7 +289,7 @@ async def _wrap_stream_async(
 # ─── Shared helpers ───────────────────────────────────────────────────
 
 
-def _extract_model(kwargs: dict) -> str:
+def _extract_model(kwargs: dict[str, Any]) -> str:
     m = kwargs.get("model", "")
     return str(m) if m else ""
 
@@ -367,11 +368,11 @@ def _process_anthropic_event(
 
 def _emit_nonstreaming(
     sdk: ScopeCallSDK,
-    request_kwargs: dict,
+    request_kwargs: dict[str, Any],
     response: Any,
     timestamp_ms: float,
     start_mono: float,
-    ctx_snapshot: object,
+    ctx_snapshot: _context.TraceContext | None,
 ) -> None:
     """Pull tokens / output / stop_reason out of a non-streaming
     messages.create response and emit.
@@ -446,7 +447,7 @@ def _emit_nonstreaming(
 def _emit_from_stream(
     sdk: ScopeCallSDK,
     *,
-    request_kwargs: dict,
+    request_kwargs: dict[str, Any],
     model: str,
     input_tokens: int,
     output_tokens: int,
@@ -458,7 +459,7 @@ def _emit_from_stream(
     ttft_ms: int | None,
     status: str,
     error_message: str | None,
-    ctx_snapshot: object,
+    ctx_snapshot: _context.TraceContext | None,
 ) -> None:
     input_text = extract_messages_text(request_kwargs.get("messages", []))
     event = build_llm_event(
@@ -483,11 +484,11 @@ def _emit_from_stream(
 
 def _emit_error(
     sdk: ScopeCallSDK,
-    request_kwargs: dict,
+    request_kwargs: dict[str, Any],
     timestamp_ms: float,
     start_mono: float,
     exc: BaseException,
-    ctx_snapshot: object,
+    ctx_snapshot: _context.TraceContext | None,
 ) -> None:
     latency_ms = int((time.monotonic() - start_mono) * 1000)
     status_code = getattr(exc, "status_code", None) or getattr(exc, "status", None)

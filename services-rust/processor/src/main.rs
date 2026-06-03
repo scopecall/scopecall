@@ -27,12 +27,14 @@ async fn main() -> anyhow::Result<()> {
 
 fn init_tracing(format: &str) {
     use tracing_subscriber::EnvFilter;
-    let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("info"));
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
 
     if format == "pretty" {
         tracing_subscriber::fmt().with_env_filter(filter).init();
     } else {
-        tracing_subscriber::fmt().json().with_env_filter(filter).init();
+        tracing_subscriber::fmt()
+            .json()
+            .with_env_filter(filter)
+            .init();
     }
 }

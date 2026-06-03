@@ -14,7 +14,6 @@ import asyncio
 
 import pytest
 
-import scopecall
 from scopecall import _context
 
 

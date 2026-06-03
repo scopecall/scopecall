@@ -51,41 +51,41 @@ pub struct LlmCallRow {
 impl From<EnrichedEvent> for LlmCallRow {
     fn from(e: EnrichedEvent) -> Self {
         Self {
-            org_id:         e.org_id,
-            trace_id:       e.event.trace_id,
-            span_id:        e.event.span_id,
+            org_id: e.org_id,
+            trace_id: e.event.trace_id,
+            span_id: e.event.span_id,
             parent_span_id: e.event.parent_span_id,
-            timestamp:      e.event.timestamp as i64,
-            latency_ms:     e.event.latency_ms,
-            ttft_ms:        e.event.ttft_ms,
-            model:          e.event.model,
-            provider:       e.event.provider,
-            input_tokens:   e.event.input_tokens,
-            output_tokens:  e.event.output_tokens,
-            cost_usd:       e.event.cost_usd,
+            timestamp: e.event.timestamp as i64,
+            latency_ms: e.event.latency_ms,
+            ttft_ms: e.event.ttft_ms,
+            model: e.event.model,
+            provider: e.event.provider,
+            input_tokens: e.event.input_tokens,
+            output_tokens: e.event.output_tokens,
+            cost_usd: e.event.cost_usd,
             // unwrap_or(0.0): unknown models leave these as None on the
             // EnrichedEvent. The ClickHouse column has DEFAULT 0 anyway,
             // but explicit beats implicit at the row-binding layer.
-            input_cost_usd:  e.event.input_cost_usd.unwrap_or(0.0),
+            input_cost_usd: e.event.input_cost_usd.unwrap_or(0.0),
             output_cost_usd: e.event.output_cost_usd.unwrap_or(0.0),
-            status:         e.event.status,
-            error_message:  e.event.error_message,
-            input_text:     e.event.input_text,
-            output_text:    e.event.output_text,
-            feature_name:   e.event.feature_name,
-            user_id:        e.event.user_id,
-            session_id:     e.event.session_id,
-            environment:        e.event.environment,
-            sdk_version:        e.event.sdk_version,
-            extra:              e.event.extra,
-            finish_reason:      e.event.finish_reason,
-            cache_read_tokens:  e.event.cache_read_tokens,
-            original_model:     e.event.original_model,
-            budget_state:       e.event.budget_state,
-            failure_mode:       e.event.failure_mode,
-            tool_calls:         e.event.tool_calls,
-            prompt_version:     e.event.prompt_version,
-            kind:               e.event.kind,
+            status: e.event.status,
+            error_message: e.event.error_message,
+            input_text: e.event.input_text,
+            output_text: e.event.output_text,
+            feature_name: e.event.feature_name,
+            user_id: e.event.user_id,
+            session_id: e.event.session_id,
+            environment: e.event.environment,
+            sdk_version: e.event.sdk_version,
+            extra: e.event.extra,
+            finish_reason: e.event.finish_reason,
+            cache_read_tokens: e.event.cache_read_tokens,
+            original_model: e.event.original_model,
+            budget_state: e.event.budget_state,
+            failure_mode: e.event.failure_mode,
+            tool_calls: e.event.tool_calls,
+            prompt_version: e.event.prompt_version,
+            kind: e.event.kind,
         }
     }
 }
@@ -110,7 +110,10 @@ impl ClickHouseWriter {
             inserter.write(&row).await.context("writing row")?;
         }
 
-        inserter.end().await.context("committing ClickHouse batch")?;
+        inserter
+            .end()
+            .await
+            .context("committing ClickHouse batch")?;
         debug!("ClickHouse batch committed");
         Ok(())
     }

@@ -38,11 +38,7 @@ pub async fn run_consumer_loop(
     enricher: Enricher,
     writer: ClickHouseWriter,
 ) -> anyhow::Result<()> {
-    let broker_list: Vec<String> = config
-        .kafka_brokers
-        .split(',')
-        .map(str::to_owned)
-        .collect();
+    let broker_list: Vec<String> = config.kafka_brokers.split(',').map(str::to_owned).collect();
 
     let client = ClientBuilder::new(broker_list)
         .build()
@@ -56,11 +52,7 @@ pub async fn run_consumer_loop(
 
     let partition = Arc::new(
         client
-            .partition_client(
-                config.kafka_topic.clone(),
-                0,
-                UnknownTopicHandling::Retry,
-            )
+            .partition_client(config.kafka_topic.clone(), 0, UnknownTopicHandling::Retry)
             .await
             .context("partition client")?,
     );

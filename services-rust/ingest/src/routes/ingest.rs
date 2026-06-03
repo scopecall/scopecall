@@ -4,7 +4,10 @@ use axum::{
     response::{IntoResponse, Response},
     Json,
 };
-use common::{errors::AppError, event::{EnrichedEvent, IngestBatch}};
+use common::{
+    errors::AppError,
+    event::{EnrichedEvent, IngestBatch},
+};
 use serde_json::json;
 use std::sync::Arc;
 use tracing::{info, warn};
@@ -68,7 +71,10 @@ pub async fn handler(
     let enriched: Vec<EnrichedEvent> = batch
         .events
         .into_iter()
-        .map(|event| EnrichedEvent { org_id: org_id.clone(), event })
+        .map(|event| EnrichedEvent {
+            org_id: org_id.clone(),
+            event,
+        })
         .collect();
 
     // Serialize each enriched event as a Kafka record payload

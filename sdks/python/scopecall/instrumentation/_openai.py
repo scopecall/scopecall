@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import inspect
 import time
+from collections.abc import AsyncIterator, Iterator
 from typing import TYPE_CHECKING, Any
 
 from .. import _context
@@ -80,12 +81,12 @@ def instrument_openai(client: Any, sdk: ScopeCallSDK) -> None:
         async def wrapped_async(*args: Any, **kwargs: Any) -> Any:
             return await _traced_create_async(sdk, original_create, args, kwargs)
 
-        completions.create = wrapped_async  # type: ignore[method-assign]
+        completions.create = wrapped_async
     else:
         def wrapped_sync(*args: Any, **kwargs: Any) -> Any:
             return _traced_create_sync(sdk, original_create, args, kwargs)
 
-        completions.create = wrapped_sync  # type: ignore[method-assign]
+        completions.create = wrapped_sync
 
 
 # ─── Sync path ────────────────────────────────────────────────────────
@@ -94,8 +95,8 @@ def instrument_openai(client: Any, sdk: ScopeCallSDK) -> None:
 def _traced_create_sync(
     sdk: ScopeCallSDK,
     original_create: Any,
-    args: tuple,
-    kwargs: dict,
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
 ) -> Any:
     streaming = bool(kwargs.get("stream", False))
     if streaming:
@@ -139,11 +140,11 @@ def _traced_create_sync(
 def _wrap_stream_sync(
     stream: Any,
     sdk: ScopeCallSDK,
-    request_kwargs: dict,
+    request_kwargs: dict[str, Any],
     timestamp_ms: float,
     start_mono: float,
-    ctx_snapshot: object,
-):
+    ctx_snapshot: _context.TraceContext | None,
+) -> Iterator[Any]:
     """Iterator wrapper that captures deltas as they arrive.
 
     We yield each chunk untouched so the caller sees the exact upstream
@@ -212,8 +213,8 @@ def _wrap_stream_sync(
 async def _traced_create_async(
     sdk: ScopeCallSDK,
     original_create: Any,
-    args: tuple,
-    kwargs: dict,
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
 ) -> Any:
     streaming = bool(kwargs.get("stream", False))
     if streaming:
@@ -249,11 +250,11 @@ async def _traced_create_async(
 async def _wrap_stream_async(
     stream: Any,
     sdk: ScopeCallSDK,
-    request_kwargs: dict,
+    request_kwargs: dict[str, Any],
     timestamp_ms: float,
     start_mono: float,
-    ctx_snapshot: object,
-):
+    ctx_snapshot: _context.TraceContext | None,
+) -> AsyncIterator[Any]:
     """Async iterator wrapper — same shape as the sync variant.
 
     We can't share code between the two because Python's generator
@@ -309,7 +310,7 @@ async def _wrap_stream_async(
 # ─── Shared helpers ───────────────────────────────────────────────────
 
 
-def _ensure_include_usage(kwargs: dict) -> None:
+def _ensure_include_usage(kwargs: dict[str, Any]) -> None:
     """Set stream_options.include_usage=True unless the caller already
     set it. Without this, streaming chunks don't carry token counts and
     the dashboard's cost columns stay zero."""
@@ -323,7 +324,7 @@ def _ensure_include_usage(kwargs: dict) -> None:
         opts["include_usage"] = True
 
 
-def _extract_model(kwargs: dict) -> str:
+def _extract_model(kwargs: dict[str, Any]) -> str:
     """Pull the model out of request kwargs. Used as a fallback when
     the response doesn't carry it (e.g. error before any chunk)."""
     m = kwargs.get("model", "")
@@ -349,11 +350,11 @@ def _accumulate_chunk(chunk: Any, chunks_text: list[str]) -> None:
 
 def _emit_nonstreaming(
     sdk: ScopeCallSDK,
-    request_kwargs: dict,
+    request_kwargs: dict[str, Any],
     response: Any,
     timestamp_ms: float,
     start_mono: float,
-    ctx_snapshot: object,
+    ctx_snapshot: _context.TraceContext | None,
 ) -> None:
     """Pull tokens / output_text / finish_reason out of a non-streaming
     chat.completions response and emit an LLMEvent.
@@ -415,7 +416,7 @@ def _emit_nonstreaming(
 def _emit_from_stream(
     sdk: ScopeCallSDK,
     *,
-    request_kwargs: dict,
+    request_kwargs: dict[str, Any],
     model: str,
     usage: Any,
     output_text: str,
@@ -425,7 +426,7 @@ def _emit_from_stream(
     ttft_ms: int | None,
     status: str,
     error_message: str | None,
-    ctx_snapshot: object,
+    ctx_snapshot: _context.TraceContext | None,
 ) -> None:
     """Emit an LLMEvent assembled from streaming chunks.
 
@@ -468,11 +469,11 @@ def _emit_from_stream(
 
 def _emit_error(
     sdk: ScopeCallSDK,
-    request_kwargs: dict,
+    request_kwargs: dict[str, Any],
     timestamp_ms: float,
     start_mono: float,
     exc: BaseException,
-    ctx_snapshot: object,
+    ctx_snapshot: _context.TraceContext | None,
 ) -> None:
     """Emit an event for a call that raised before producing any response.
 

@@ -23,7 +23,11 @@ async fn check_redis(client: &redis::Client) -> &'static str {
     match client.get_multiplexed_async_connection().await {
         Ok(mut conn) => {
             let pong: redis::RedisResult<String> = redis::cmd("PING").query_async(&mut conn).await;
-            if pong.is_ok() { "ok" } else { "degraded" }
+            if pong.is_ok() {
+                "ok"
+            } else {
+                "degraded"
+            }
         }
         Err(_) => "degraded",
     }

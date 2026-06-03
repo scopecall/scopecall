@@ -1,6 +1,6 @@
 use anyhow::Context;
 use rskafka::{
-    client::{Client, ClientBuilder, partition::UnknownTopicHandling},
+    client::{partition::UnknownTopicHandling, Client, ClientBuilder},
     record::Record,
 };
 use std::sync::Arc;
@@ -26,13 +26,13 @@ impl KafkaProducer {
 
     /// Produce a batch of JSON-encoded events to the configured topic.
     pub async fn produce_batch(&self, payloads: Vec<Vec<u8>>) -> anyhow::Result<()> {
-        let controller = self.client.controller_client().context("controller client")?;
+        let controller = self
+            .client
+            .controller_client()
+            .context("controller client")?;
 
         // Auto-create topic if missing (dev convenience — prod uses pre-created topics)
-        controller
-            .create_topic(&self.topic, 1, 1, 5_000)
-            .await
-            .ok(); // ignore AlreadyExists
+        controller.create_topic(&self.topic, 1, 1, 5_000).await.ok(); // ignore AlreadyExists
 
         let partition = self
             .client
@@ -52,7 +52,10 @@ impl KafkaProducer {
             .collect();
 
         partition
-            .produce(records, rskafka::client::partition::Compression::NoCompression)
+            .produce(
+                records,
+                rskafka::client::partition::Compression::NoCompression,
+            )
             .await
             .context("producing records")?;
 

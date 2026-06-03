@@ -78,7 +78,12 @@ struct FailingWriter {
 impl FailingWriter {
     fn new() -> (Self, Arc<Mutex<u32>>) {
         let counter = Arc::new(Mutex::new(0u32));
-        (Self { attempt_count: Arc::clone(&counter) }, counter)
+        (
+            Self {
+                attempt_count: Arc::clone(&counter),
+            },
+            counter,
+        )
     }
 
     async fn insert_batch(&self, _: Vec<EnrichedEvent>) -> anyhow::Result<()> {
@@ -95,7 +100,12 @@ struct CapturingDlq {
 impl CapturingDlq {
     fn new() -> (Self, Arc<Mutex<Vec<DlqEnvelope>>>) {
         let store = Arc::new(Mutex::new(Vec::new()));
-        (Self { captured: Arc::clone(&store) }, store)
+        (
+            Self {
+                captured: Arc::clone(&store),
+            },
+            store,
+        )
     }
 
     async fn send(&self, envelope: DlqEnvelope) -> anyhow::Result<()> {

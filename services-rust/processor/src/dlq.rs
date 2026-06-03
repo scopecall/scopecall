@@ -18,10 +18,7 @@
 use anyhow::Context;
 use common::event::EnrichedEvent;
 use rskafka::{
-    client::{
-        partition::UnknownTopicHandling,
-        Client,
-    },
+    client::{partition::UnknownTopicHandling, Client},
     record::Record,
 };
 use serde::{Deserialize, Serialize};
@@ -76,16 +73,11 @@ impl DlqProducer {
     /// uncommitted would cause the processor to re-attempt the failing event
     /// forever (poison-pill loop).
     pub async fn send(&self, envelope: DlqEnvelope) -> anyhow::Result<()> {
-        let payload =
-            serde_json::to_vec(&envelope).context("serializing DlqEnvelope")?;
+        let payload = serde_json::to_vec(&envelope).context("serializing DlqEnvelope")?;
 
         let partition = self
             .client
-            .partition_client(
-                self.topic.clone(),
-                0,
-                UnknownTopicHandling::Retry,
-            )
+            .partition_client(self.topic.clone(), 0, UnknownTopicHandling::Retry)
             .await
             .context("DLQ partition client")?;
 

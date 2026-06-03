@@ -88,10 +88,7 @@ pub async fn resolve_key(
 /// Write the negative-cache entry for instant revocation.
 /// Called by the revocation endpoint.
 #[allow(dead_code)]
-pub async fn revoke_key(
-    raw_key: &str,
-    redis_client: &redis::Client,
-) -> anyhow::Result<()> {
+pub async fn revoke_key(raw_key: &str, redis_client: &redis::Client) -> anyhow::Result<()> {
     let hash = hash_api_key(raw_key);
     let mut conn = redis_client
         .get_multiplexed_async_connection()

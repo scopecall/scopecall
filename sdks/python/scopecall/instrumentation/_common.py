@@ -81,7 +81,7 @@ def build_llm_event(
     error_message: str | None = None,
     tool_calls: str | None = None,
     extra: str | None = None,
-    ctx_override: object | None = None,
+    ctx_override: _context.TraceContext | None = None,
 ) -> LLMEvent:
     """Construct an LLMEvent and apply context + redactor + config defaults.
 
