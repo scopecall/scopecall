@@ -1,6 +1,6 @@
 {
   "name": "@scopecall/scopecall-js",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Official TypeScript/Node.js SDK for ScopeCall AI observability",
   "license": "Apache-2.0",
   "files": [
