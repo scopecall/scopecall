@@ -1,6 +1,6 @@
 # Contributing to ScopeCall
 
-Thank you for your interest in contributing. ScopeCall is licensed under BUSL-1.1, which means contributions are welcome and you retain copyright — but hosting ScopeCall as a managed service for third parties requires a commercial agreement. See [LICENSE](LICENSE) for details.
+Thank you for your interest in contributing. ScopeCall is licensed under [Apache 2.0](LICENSE) — contributions are welcome, you retain copyright, and your contributions are licensed under the same terms.
 
 No CLA required.
 

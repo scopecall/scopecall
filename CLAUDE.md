@@ -1,6 +1,6 @@
 # ScopeCall — Contributor Guide
 
-Source-available, self-hostable AI observability ([BUSL-1.1](LICENSE) — converts to Apache 2.0 on May 26, 2031). This file orients contributors (and AI coding assistants) working in this repo.
+Open-source, self-hostable AI observability ([Apache 2.0](LICENSE)). This file orients contributors (and AI coding assistants) working in this repo.
 
 ## What this is
 

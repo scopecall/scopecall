@@ -3,7 +3,7 @@
 Python SDK for [ScopeCall](https://scopecall.com) — source-available, self-hostable AI cost and workflow observability.
 
 [![PyPI](https://img.shields.io/pypi/v/scopecall-py)](https://pypi.org/project/scopecall-py/)
-[![License](https://img.shields.io/badge/license-BUSL--1.1-blue)](LICENSE)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 [![Python](https://img.shields.io/pypi/pyversions/scopecall-py)](https://pypi.org/project/scopecall-py/)
 
 Wraps the OpenAI and Anthropic Python clients so every LLM call shows
@@ -478,5 +478,5 @@ dashboard.
 
 ## License
 
-[BUSL-1.1](LICENSE) — free for any internal use; not for resale as a
-managed service. Converts to Apache 2.0 on May 26, 2031.
+[Apache 2.0](LICENSE). Free for any use — self-hosted, modified,
+redistributed, or built on top of for commercial products.

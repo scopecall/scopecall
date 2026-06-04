@@ -5,10 +5,11 @@ build-backend = "hatchling.build"
 [project]
 name = "scopecall-py"
 version = "0.2.0"
-description = "Source-available, self-hostable AI observability — scope every LLM call in production"
+description = "Open-source, self-hostable AI observability — scope every LLM call in production"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "BUSL-1.1" }
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 authors = [{ name = "ScopeCall", email = "founders@scopecall.com" }]
 keywords = ["ai", "observability", "llm", "openai", "anthropic", "tracing", "cost", "scopecall"]
 classifiers = [

@@ -9,7 +9,7 @@
 
 <p align="center">
   <a href="https://github.com/scopecall/scopecall/releases/tag/v0.1.1"><img src="https://img.shields.io/badge/version-v0.1.1-6366f1" alt="Version"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-BUSL--1.1-blue" alt="License"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License"></a>
   <a href="https://www.npmjs.com/package/@scopecall/scopecall-js"><img src="https://img.shields.io/npm/v/@scopecall/scopecall-js?label=npm&color=cb3837" alt="npm"></a>
   <a href="https://pypi.org/project/scopecall-py/"><img src="https://img.shields.io/pypi/v/scopecall-py?label=pypi&color=3776ab" alt="PyPI"></a>
   <a href="https://docs.scopecall.com"><img src="https://img.shields.io/badge/docs-docs.scopecall.com-informational" alt="Docs"></a>
@@ -17,11 +17,11 @@
 
 ---
 
-[ScopeCall](https://scopecall.com) is source-available, self-hostable AI cost and workflow observability. Find the prompt, customer, model, and workflow path behind every LLM cost spike — without routing traffic through a proxy.
+[ScopeCall](https://scopecall.com) is open-source (Apache 2.0), self-hostable AI cost and workflow observability. Find the prompt, customer, model, and workflow path behind every LLM cost spike — without routing traffic through a proxy.
 
 ScopeCall captures LLM traces via SDK instrumentation (no added latency, no proxy) — TypeScript (OpenAI, Anthropic, Vercel AI SDK) and Python (OpenAI, Anthropic; sync, async, streaming) — ships the events to a self-hosted ClickHouse + Postgres stack, and displays them in a real-time dashboard with cost / latency / prompt-version breakdowns. Budget enforcement and an agent execution debugger are on the roadmap.
 
-Licensed under [BUSL-1.1](LICENSE) — free for any internal use; we just ask that you not resell it as a managed service. The license converts to Apache-2.0 four years after each release.
+Licensed under [Apache 2.0](LICENSE). Free for any use — self-hosted, commercial, modified, redistributed. We monetize via the managed-cloud product (in development) and enterprise features, not via licensing teeth.
 
 ---
 
@@ -220,4 +220,4 @@ See [SECURITY.md](SECURITY.md) or email security@scopecall.com.
 
 ## License
 
-[BUSL-1.1](LICENSE) — free to self-host for internal use. Managed hosting for third parties requires a commercial agreement. Converts to Apache 2.0 on May 26, 2031.
+[Apache 2.0](LICENSE). Free to self-host, modify, redistribute, or build commercial products on top of. We monetize via the managed-cloud product and enterprise features — not via licensing restrictions.

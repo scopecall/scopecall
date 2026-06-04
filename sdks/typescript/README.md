@@ -1,9 +1,9 @@
 # @scopecall/scopecall-js
 
-TypeScript SDK for [ScopeCall](https://scopecall.com) — source-available, self-hostable AI observability.
+TypeScript SDK for [ScopeCall](https://scopecall.com) — open-source, self-hostable AI observability.
 
 [![npm](https://img.shields.io/npm/v/@scopecall/scopecall-js)](https://www.npmjs.com/package/@scopecall/scopecall-js)
-[![License](https://img.shields.io/badge/license-BUSL--1.1-blue)](../../LICENSE)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](../../LICENSE)
 
 ---
 
@@ -257,4 +257,4 @@ See the [main repo README](../../README.md) for the full Docker Compose quicksta
 
 ## License
 
-[BUSL-1.1](LICENSE) — free to use for internal applications. Managed hosting for third parties requires a commercial agreement.
+[Apache 2.0](LICENSE). Free for any use — self-hosted, modified, redistributed, or built on top of for commercial products.

@@ -2,7 +2,7 @@
   "name": "@scopecall/scopecall-js",
   "version": "0.1.1",
   "description": "Official TypeScript/Node.js SDK for ScopeCall AI observability",
-  "license": "BUSL-1.1",
+  "license": "Apache-2.0",
   "files": [
     "dist",
     "README.md",

@@ -60,4 +60,4 @@ work because each framework has its own callback/middleware story.
 
 ## Cloud
 
-A managed ScopeCall Cloud (same software, hosted by us) is planned alongside the self-hosted option. The self-hosted version is source-available under [BUSL-1.1](../LICENSE) and is and remains a first-class target — not a stripped-down teaser.
+A managed ScopeCall Cloud (same software, hosted by us) is planned alongside the self-hosted option. The self-hosted version is open-source under [Apache 2.0](../LICENSE) and is and remains a first-class target — not a stripped-down teaser. Cloud monetization comes from operational excellence + enterprise features (SSO, audit logs, SLA), not licensing teeth.

@@ -9,6 +9,15 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **License: Apache 2.0.** The repository and both SDKs are now licensed
+  under [Apache 2.0](LICENSE). Previously published package versions
+  (`@scopecall/scopecall-js@0.1.1`, `scopecall-py@0.2.0`) remain under
+  their original terms on npm/PyPI — those tarballs are immutable. The
+  next patch versions of each SDK will ship under Apache 2.0. No code,
+  behavior, or wire-format changes.
+
 ---
 
 ## Python SDK — [0.2.0] — 2026-06-03
