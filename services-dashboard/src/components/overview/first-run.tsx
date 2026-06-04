@@ -218,7 +218,7 @@ export function FirstRunDashboard({ orgId, onFirstCall }: Props) {
             Create one
           </a>
           . Stuck?{" "}
-          <a href="https://docs.scopecall.com/quickstart" className="text-brand hover:underline">
+          <a href="https://scopecall.com/docs/quickstart" className="text-brand hover:underline">
             Read the quickstart
           </a>
           .

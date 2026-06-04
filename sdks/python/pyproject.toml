@@ -51,7 +51,7 @@ dev = [
 [project.urls]
 Homepage = "https://scopecall.com"
 Repository = "https://github.com/scopecall/scopecall"
-Documentation = "https://docs.scopecall.com"
+Documentation = "https://scopecall.com/docs"
 Issues = "https://github.com/scopecall/scopecall/issues"
 
 [tool.hatch.build.targets.wheel]

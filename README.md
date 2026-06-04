@@ -12,7 +12,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License"></a>
   <a href="https://www.npmjs.com/package/@scopecall/scopecall-js"><img src="https://img.shields.io/npm/v/@scopecall/scopecall-js?label=npm&color=cb3837" alt="npm"></a>
   <a href="https://pypi.org/project/scopecall-py/"><img src="https://img.shields.io/pypi/v/scopecall-py?label=pypi&color=3776ab" alt="PyPI"></a>
-  <a href="https://docs.scopecall.com"><img src="https://img.shields.io/badge/docs-docs.scopecall.com-informational" alt="Docs"></a>
+  <a href="https://scopecall.com/docs"><img src="https://img.shields.io/badge/docs-scopecall.com%2Fdocs-informational" alt="Docs"></a>
 </p>
 
 ---
@@ -202,7 +202,7 @@ all reads go through the Go API.
 
 Full self-hosting is a first-class target. The Docker Compose stack in this repo is the same stack we run in production. Minimum requirements: 4 vCPU, 8 GB RAM, 100 GB disk (for ClickHouse).
 
-See [docs.scopecall.com/self-hosting](https://docs.scopecall.com/self-hosting) for production hardening, Kubernetes manifests, and environment variable reference.
+See [scopecall.com/docs/self-hosting](https://scopecall.com/docs/self-hosting) for production hardening, Kubernetes manifests, and environment variable reference.
 
 ---
 
