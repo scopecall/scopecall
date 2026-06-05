@@ -38,6 +38,7 @@ func (s *Server) GetOverview(ctx context.Context, req gen.GetOverviewRequestObje
 	return gen.GetOverview200JSONResponse{
 		TotalCalls:   int(res.TotalCalls),
 		TotalCostUsd: res.TotalCostUSD,
+		ErrorCostUsd: res.ErrorCostUSD,
 		AvgLatencyMs: res.AvgLatencyMS,
 		P99LatencyMs: res.P99LatencyMS,
 		ErrorRatePct: res.ErrorRatePct,

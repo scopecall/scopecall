@@ -30,6 +30,10 @@ interface StatProps {
   delta?: { delta: number; pct: number; direction: Direction };
   spark?: number[];
   isLoading: boolean;
+  /** Optional row rendered below the big number. Used by the Total Cost tile
+   *  to surface a success / error breakdown when there's real spend on
+   *  errored calls (rare — usually mid-stream provider failures). */
+  footer?: React.ReactNode;
 }
 
 function fmt(n: number, opts?: Intl.NumberFormatOptions) {
@@ -106,7 +110,7 @@ function Delta({ delta, pct, direction }: { delta: number; pct: number; directio
   );
 }
 
-function Stat({ icon: Icon, title, value, delta, spark, isLoading }: StatProps) {
+function Stat({ icon: Icon, title, value, delta, spark, isLoading, footer }: StatProps) {
   return (
     <div className="p-3 rounded-lg border border-border bg-card overflow-hidden">
       {/* Row 1: icon + label + delta — meta info gets its own line */}
@@ -130,6 +134,14 @@ function Stat({ icon: Icon, title, value, delta, spark, isLoading }: StatProps) 
               <Sparkline data={spark} />
             </div>
           )}
+        </div>
+      )}
+      {/* Row 3 (optional): contextual breakdown. Currently only the Total
+       *  Cost tile uses this — and only when error_cost_usd > 0, so most
+       *  users will never see it. Tiles without a footer collapse cleanly. */}
+      {footer && !isLoading && (
+        <div className="mt-2 pt-2 border-t border-border/60 text-[10px] tabular-nums text-muted-foreground">
+          {footer}
         </div>
       )}
     </div>
@@ -204,6 +216,31 @@ export function StatCards({ data, prior, series, isLoading, error }: StatCardsPr
       delta: delta(data?.total_cost_usd, prior?.total_cost_usd, "up-is-bad"),
       spark: costSpark,
       isLoading,
+      // Only surface the success/error split when an errored call actually
+      // racked up cost. The common case (auto-instrumentation emits
+      // input_tokens=0 on pre-flight failures → cost=0) shows the bare total,
+      // matching the v1 layout. Non-zero error cost is interesting on its
+      // own — it points at mid-stream provider failures the user is paying
+      // for. We use a small noise floor (a fraction of a cent) so floating
+      // point dust from summation doesn't trigger the split.
+      footer: data && data.error_cost_usd > 0.00005 ? (
+        <div className="flex items-center justify-between gap-3">
+          <span className="inline-flex items-center gap-1">
+            <span className="size-1.5 rounded-full bg-emerald-400/80" aria-hidden />
+            <span className="text-muted-foreground">success</span>
+            <span className="text-foreground font-medium">
+              {fmt(data.total_cost_usd - data.error_cost_usd, { style: "currency", currency: "USD", maximumFractionDigits: 4 })}
+            </span>
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <span className="size-1.5 rounded-full bg-amber-400/80" aria-hidden />
+            <span className="text-muted-foreground">error</span>
+            <span className="text-foreground font-medium">
+              {fmt(data.error_cost_usd, { style: "currency", currency: "USD", maximumFractionDigits: 4 })}
+            </span>
+          </span>
+        </div>
+      ) : undefined,
     },
     {
       icon: Activity,

@@ -218,7 +218,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List alerts (stub — anomaly detection is not yet implemented) */
+        /**
+         * List alert events (back-compat alias for /api/v1/alerts/events)
+         * @description Returns recent alert events for the org. Maintained as a stable alias
+         *     for older dashboard versions; new clients should use
+         *     /api/v1/alerts/events directly. The full alerts surface (rules CRUD,
+         *     events feed, evaluator) lives under /api/v1/alerts/rules and
+         *     /api/v1/alerts/events — see those operations for the current shape.
+         */
         get: operations["ListAlerts"];
         put?: never;
         post?: never;
@@ -246,6 +253,14 @@ export interface components {
             total_calls: number;
             /** Format: double */
             total_cost_usd: number;
+            /**
+             * Format: double
+             * @description Subset of total_cost_usd attributable to calls with status != 'success'.
+             *     Typically zero (most error paths in the SDKs auto-emit input_tokens=0).
+             *     Non-zero values usually indicate mid-stream provider failures where
+             *     the provider already processed the prompt before the connection died.
+             */
+            error_cost_usd: number;
             /** Format: double */
             avg_latency_ms: number;
             /** Format: double */
@@ -895,7 +910,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Alert list (currently always empty) */
+            /** @description Alert event list */
             200: {
                 headers: {
                     [name: string]: unknown;

@@ -141,6 +141,10 @@ type MetricsResponse struct {
 // OverviewResponse defines model for OverviewResponse.
 type OverviewResponse struct {
 	AvgLatencyMs float64 `json:"avg_latency_ms"`
+	// ErrorCostUsd is the subset of total_cost_usd attributable to non-success
+	// calls (almost always mid-stream provider failures). See schemas/api/v1.yaml
+	// for the full description.
+	ErrorCostUsd float64 `json:"error_cost_usd"`
 	ErrorRatePct float64 `json:"error_rate_pct"`
 	P99LatencyMs float64 `json:"p99_latency_ms"`
 	TotalCalls   int     `json:"total_calls"`

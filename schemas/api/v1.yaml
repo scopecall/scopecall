@@ -93,13 +93,21 @@ components:
 
     OverviewResponse:
       type: object
-      required: [total_calls, total_cost_usd, avg_latency_ms, p99_latency_ms, error_rate_pct, unique_traces]
+      required: [total_calls, total_cost_usd, error_cost_usd, avg_latency_ms, p99_latency_ms, error_rate_pct, unique_traces]
       properties:
         total_calls:
           type: integer
         total_cost_usd:
           type: number
           format: double
+        error_cost_usd:
+          type: number
+          format: double
+          description: |
+            Subset of total_cost_usd attributable to calls with status != 'success'.
+            Typically zero (most error paths in the SDKs auto-emit input_tokens=0).
+            Non-zero values usually indicate mid-stream provider failures where
+            the provider already processed the prompt before the connection died.
         avg_latency_ms:
           type: number
           format: double
