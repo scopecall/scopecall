@@ -425,8 +425,11 @@ function TraceTreeView() {
         <Button variant="ghost" size="sm" onClick={() => router.back()} className="gap-1">
           <ArrowLeft className="h-4 w-4" /> Back
         </Button>
+        {/* Header shows the full trace_id (it's the primary identity on this
+            page); the copy button is icon-only here so it doesn't render a
+            truncated duplicate next to the full one. */}
         <span className="font-mono text-xs text-muted-foreground">{params.trace_id}</span>
-        <CopyButton value={params.trace_id} />
+        <CopyButton value={params.trace_id} iconOnly />
       </div>
 
       {/* Rollups + view toggle */}
