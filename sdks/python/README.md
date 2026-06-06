@@ -501,14 +501,22 @@ To disable redaction entirely (rarely a good idea outside dev), pass
 
 | Provider | Status |
 |----------|--------|
-| OpenAI (`chat.completions.create`) — sync + async + streaming | ✅ v0.2.0 |
-| Anthropic (`messages.create`) — sync + async + streaming | ✅ v0.2.0 |
-| Google Gemini | 🔜 v0.3 |
-| LangChain (via manual API today; native bridge planned) | 🔜 v0.3 |
-| LlamaIndex (via manual API today) | 🔜 v0.3 |
+| OpenAI (`chat.completions.create`) — sync + async + streaming | ✅ since v0.2.0 |
+| Anthropic (`messages.create`) — sync + async + streaming | ✅ since v0.2.0 |
+| Google Gemini | 🔜 v0.3.1 |
+| LangChain (via manual API today; native bridge planned) | 🔜 v0.5.0 |
+| LlamaIndex (via manual API today; native bridge planned) | 🔜 v0.5.0 |
+| CrewAI / AutoGen / DSPy (via the OpenTelemetry GenAI bridge) | 🔜 v0.4.x |
+
+OpenAI and Anthropic instrumentation continue to work in v0.3.0; the
+release added the cost-attribution hierarchy (`sdk.workflow()` /
+`sdk.agent()` / `sdk.step()`) and `customer_id` / retry / `is_test`
+attribution on top of the existing provider instrumentation.
 
 For unsupported providers / frameworks, use `sdk.record_llm_call(...)`
-to emit events directly — the wire format is the same.
+to emit events directly — the wire format is the same. See the
+"Manual instrumentation" section above for the full example with
+v0.3 retry kwargs.
 
 ---
 
