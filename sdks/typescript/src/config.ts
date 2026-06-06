@@ -56,6 +56,14 @@ export interface ScopeCallConfig {
   /** Default session ID attached to all events. */
   defaultSessionId?: string;
   /**
+   * v0.3 — when true, every event is tagged is_test=true so the
+   * dashboard can exclude non-production traffic from cost reports.
+   * Use for eval suites, CI runs, smoke tests, replays, and backfills.
+   * Also settable via the SCOPECALL_TEST=true env var (consulted when
+   * `test` is undefined).
+   */
+  test?: boolean;
+  /**
    * Default prompt version label attached to events when no trace-level
    * promptVersion is set. Useful for single-prompt apps that want every
    * call tagged with a build/commit/release identifier.
@@ -66,6 +74,19 @@ export interface ScopeCallConfig {
   defaultPromptVersion?: string;
   /** Logger for internal SDK warnings. Defaults to console. Set null to silence. */
   logger?: { warn(msg: string): void; error(msg: string): void } | null;
+}
+
+/**
+ * v0.3 — resolve the is_test flag. Tri-state: undefined means "consult
+ * SCOPECALL_TEST env var"; explicit true/false overrides. Common pattern
+ * for vitest / jest / CI runners: set SCOPECALL_TEST=true once on the
+ * process and every event in the run gets tagged is_test=true with no
+ * app-code changes.
+ */
+export function resolveTestFlag(config: ScopeCallConfig): boolean {
+  if (typeof config.test === "boolean") return config.test;
+  const env = (process.env.SCOPECALL_TEST ?? "").toLowerCase();
+  return env === "1" || env === "true" || env === "yes" || env === "on";
 }
 
 export function validate(config: ScopeCallConfig): void {

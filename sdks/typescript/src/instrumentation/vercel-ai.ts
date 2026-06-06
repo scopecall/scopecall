@@ -45,6 +45,7 @@ import { storage } from "../context.js";
 import { resolveModel, calculateCost } from "../pricing/resolve.js";
 import { Redactor } from "../_redactor.js";
 import type { ScopeCallConfig } from "../config.js";
+import { resolveTestFlag } from "../config.js";
 import type { ScopeCallExporter } from "../exporter.js";
 
 declare const __SDK_VERSION__: string;
@@ -420,6 +421,10 @@ function buildEvent(args: BuildEventArgs): LLMEvent {
     feature_name: ctx?.name ?? config.defaultFeature ?? null,
     user_id: config.defaultUserId ?? null,
     session_id: config.defaultSessionId ?? null,
+    customer_id: ctx?.customerId ?? null,
+    is_test: resolveTestFlag(config),
+    attempt_number: 1,
+    retry_reason: null,
     environment: config.environment ?? "production",
     sdk_version: sdkVersion,
     extra: null,

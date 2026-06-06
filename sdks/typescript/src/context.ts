@@ -31,6 +31,21 @@ export interface TraceContext {
    * span, pass `{ promptVersion: null }` explicitly.
    */
   promptVersion: string | null;
+  /**
+   * Container kind for the synthetic span emitted on block exit. One of
+   * "workflow" | "agent" | "step". trace() defaults to "workflow" for
+   * backward compat; workflow() / agent() / step() set it explicitly so
+   * the dashboard can group cost by level. The Rust ingest enforces the
+   * closed enum {llm, workflow, agent, step}.
+   */
+  kind: "workflow" | "agent" | "step";
+  /**
+   * B2B customer / tenant identifier. Distinct from user_id (end-user):
+   * for B2B apps where one customer organization has many end-users,
+   * customer_id is the field cost reports group by. Inherited from
+   * parent trace; explicit `opts.customerId` overrides. (v0.3)
+   */
+  customerId: string | null;
 }
 
 /**
@@ -41,6 +56,18 @@ export interface TraceContext {
 export interface TraceOptions {
   /** Identifier for the prompt iteration this trace is running. */
   promptVersion?: string | null;
+  /**
+   * Container kind override. Used internally by sdk.workflow() / agent() /
+   * step() to set the right kind. Callers of trace() directly normally
+   * leave this unset (defaults to "workflow").
+   */
+  kind?: "workflow" | "agent" | "step";
+  /**
+   * B2B customer / tenant identifier. Typically set on the outermost
+   * trace (e.g. inside a request handler) so nested spans inherit it.
+   * Distinct from user_id (end-user). (v0.3)
+   */
+  customerId?: string | null;
 }
 
 export const storage = new AsyncLocalStorage<TraceContext>();
@@ -77,6 +104,12 @@ export async function trace<T>(
     opts && "promptVersion" in opts
       ? (opts.promptVersion ?? null)
       : (parent?.promptVersion ?? null);
+  // customerId precedence: explicit opts > parent trace > null. Same
+  // inheritance shape as promptVersion above.
+  const customerId: string | null =
+    opts && "customerId" in opts
+      ? (opts.customerId ?? null)
+      : (parent?.customerId ?? null);
   const ctx: TraceContext = {
     // INHERIT traceId from the active trace when nested — without this,
     // nested traces split into separate traces on the dashboard and the
@@ -87,6 +120,8 @@ export async function trace<T>(
     parentSpanId: parent?.spanId ?? null,
     name,
     promptVersion,
+    kind: opts?.kind ?? "workflow",
+    customerId,
   };
   return storage.run(ctx, () => fn(ctx));
 }

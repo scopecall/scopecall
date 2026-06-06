@@ -24,11 +24,15 @@ Field-by-field history (so the next maintainer knows why each is here):
                             budget_state, failure_mode
   Tools (Round-3)           tool_calls (JSON-stringified)
   Prompts (Round-4)         prompt_version
-  Kind (Round-4)            kind = 'llm' | 'workflow' — workflow spans
-                            are synthetic rows emitted by sdk.trace()
-                            blocks; they carry zero tokens / zero cost
-                            and are filtered out of LLM analytics
-                            rollups (see schemas/clickhouse/005_*.sql).
+  Kind (Round-4 + v0.3)     kind = 'llm' | 'workflow' | 'agent' | 'step'.
+                            llm = provider call. The other three are
+                            synthetic container rows emitted by
+                            sdk.trace() / sdk.workflow() / sdk.agent()
+                            / sdk.step() blocks; they carry zero tokens
+                            / zero cost and are filtered out of LLM
+                            analytics rollups (see
+                            schemas/clickhouse/005_*.sql). The Rust
+                            ingest validates the closed set.
 """
 
 from __future__ import annotations
@@ -87,6 +91,21 @@ class LLMEvent:
     feature_name: str | None = None
     user_id: str | None = None
     session_id: str | None = None
+    # B2B customer / tenant identifier. Distinct from user_id (end-user):
+    # for B2B apps where one customer organization has many end-users,
+    # customer_id is the field cost reports group by. Set via the
+    # customer_id kwarg on sdk.trace() / workflow() / agent() / step(),
+    # inherited from parent like user_id / session_id. (v0.3)
+    #
+    # PII CONTRACT — customer_id MUST be a tenant / account slug or
+    # opaque ID (e.g. "customer_acme", "org_4adb529080de4df8"). Do NOT
+    # put raw email addresses, names, or other PII here. The dashboard
+    # surfaces this field to viewer-role users alongside user_id and
+    # session_id; gating on owner-role is intentionally NOT applied
+    # because customer_id is treated as an identifier, not content.
+    # If your app needs to attach PII for support workflows, use
+    # `extra` (gated on owner-role) instead.
+    customer_id: str | None = None
 
     # ── Meta ─────────────────────────────────────────────────────────────
     environment: str = "production"
@@ -102,6 +121,49 @@ class LLMEvent:
     # ── Streaming + tool-call detail (Round-1 P1) ───────────────────────
     finish_reason: str | None = None
     cache_read_tokens: int | None = None
+
+    # ── Retry attribution (v0.3) ────────────────────────────────────────
+    # attempt_number is the 1-based attempt index FROM THE CALLER's
+    # perspective — i.e. how many times the application has tried to make
+    # this LLM call. Default 1 means "first attempt." Provider-internal
+    # retries (the openai-py / anthropic-sdk built-in retries) don't add
+    # to your bill so they're NOT counted here.
+    #
+    # retry_reason is None on attempt 1 and SHOULD be one of:
+    # "rate_limit" | "timeout" | "server_error" | "transient_network"
+    # | "agent_decision" | "manual" | "unknown". Ingest enforces the set.
+    #
+    # Critical for cost attribution: "cost from retries" is a top-line
+    # dashboard widget. Surfaces the case where a retry storm silently
+    # eats budget.
+    attempt_number: int = 1
+    retry_reason: str | None = None
+
+    # is_test marks non-production traffic (eval suite, CI, smoke tests,
+    # replays, backfills). The dashboard's "Production only" toggle
+    # filters these out so they don't inflate cost reports. Default
+    # false means production. Set via sdk.init(test=True) or the
+    # SCOPECALL_TEST=true env var; can also be overridden per call on
+    # record_llm_call().
+    is_test: bool = False
+
+    # ── Server-derived cost metadata (v0.3) ────────────────────────────
+    # These fields are SERVER-DERIVED — do not set them in SDK code or
+    # record_llm_call() calls. The Rust processor's reprice() unconditionally
+    # overwrites them after server-side pricing, so any value the SDK
+    # puts here is discarded. They're in the dataclass only because the
+    # wire type doubles as the canonical record shape the dashboard reads
+    # back via the API. If you find yourself wanting to set them, you
+    # probably want a different test/escape hatch — open an issue.
+    #
+    # cost_source legal values (closed enum enforced by the processor):
+    #   "server_computed" - reprice() set cost from the pricing table
+    #   "sdk_fallback"    - model unknown to pricing table; kept SDK cost
+    #   "unknown_model"   - model unknown AND SDK cost was 0
+    #   "container"       - workflow / agent / step row (no model)
+    cache_read_cost_usd: float | None = None
+    cost_source: str | None = None
+    pricing_version: str | None = None
 
     # ── Routing intel (Round-3) ─────────────────────────────────────────
     # When a gateway / fallback re-routes a request to a different model,
@@ -121,13 +183,14 @@ class LLMEvent:
     # parent trace inherited unless explicitly overridden in a child.
     prompt_version: str | None = None
 
-    # ── Kind (Round-4 P0) ───────────────────────────────────────────────
-    # 'llm' for provider calls, 'workflow' for synthetic spans emitted by
-    # sdk.trace() blocks. Workflow rows have zero tokens / zero cost and
+    # ── Kind (Round-4 P0; v0.3 expanded) ────────────────────────────────
+    # 'llm' for provider calls. 'workflow' | 'agent' | 'step' are synthetic
+    # container spans emitted by sdk.trace() / sdk.workflow() / sdk.agent()
+    # / sdk.step() blocks. Container rows have zero tokens / zero cost and
     # are filtered out of LLM analytics rollups. The Rust ingest validates
-    # this field is one of the two values; the ClickHouse rollup MV uses
-    # it to gate aggregation.
-    kind: Literal["llm", "workflow"] = field(default="llm")
+    # this field against the closed set {llm, workflow, agent, step}; the
+    # ClickHouse rollup MV gates aggregation to kind='llm'.
+    kind: Literal["llm", "workflow", "agent", "step"] = field(default="llm")
 
     def to_wire(self) -> dict[str, object]:
         """Serialize to a dict matching the Rust ingest's accepted shape.
@@ -157,11 +220,18 @@ class LLMEvent:
             "feature_name": self.feature_name,
             "user_id": self.user_id,
             "session_id": self.session_id,
+            "customer_id": self.customer_id,
             "environment": self.environment,
             "sdk_version": self.sdk_version,
             "extra": self.extra,
             "finish_reason": self.finish_reason,
             "cache_read_tokens": self.cache_read_tokens,
+            "attempt_number": self.attempt_number,
+            "retry_reason": self.retry_reason,
+            "is_test": self.is_test,
+            "cache_read_cost_usd": self.cache_read_cost_usd,
+            "cost_source": self.cost_source,
+            "pricing_version": self.pricing_version,
             "original_model": self.original_model,
             "budget_state": self.budget_state,
             "failure_mode": self.failure_mode,

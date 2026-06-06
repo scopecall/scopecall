@@ -174,11 +174,22 @@ type Trace struct {
 	InputCostUsd  *float64 `json:"input_cost_usd,omitempty"`
 	OutputCostUsd *float64 `json:"output_cost_usd,omitempty"`
 	PromptVersion *string  `json:"prompt_version,omitempty"`
-	// Kind: "llm" (default) or "workflow". Workflow rows are synthetic
-	// containers emitted by sdk.trace() so the trace-tree JOIN has a
-	// real parent. Defaults to "llm" — pre-v0.1.2 rows in the DB will
-	// stay "llm" via the CH column DEFAULT.
+	// Kind: "llm" (default), "workflow", "agent", or "step". The latter
+	// three are synthetic container spans emitted by sdk.trace() /
+	// sdk.workflow() / sdk.agent() / sdk.step() so the trace-tree JOIN
+	// has a real parent. agent + step joined the closed set in v0.3 for
+	// cost rollups across the workflow → agent → step hierarchy.
 	Kind *string `json:"kind,omitempty"`
+	// v0.3 cost-attribution fields. All hand-added (same reason as
+	// InputCostUsd / OutputCostUsd above — full regen would explode the
+	// error-response types). Keep in sync with schemas/api/v1.yaml.
+	CustomerId       *string  `json:"customer_id,omitempty"`
+	AttemptNumber    *int     `json:"attempt_number,omitempty"`
+	RetryReason      *string  `json:"retry_reason,omitempty"`
+	IsTest           *bool    `json:"is_test,omitempty"`
+	CacheReadCostUsd *float64 `json:"cache_read_cost_usd,omitempty"`
+	CostSource       *string  `json:"cost_source,omitempty"`
+	PricingVersion   *string  `json:"pricing_version,omitempty"`
 	Environment   string   `json:"environment"`
 	ErrorMessage  *string  `json:"error_message,omitempty"`
 	Extra         *string  `json:"extra,omitempty"`

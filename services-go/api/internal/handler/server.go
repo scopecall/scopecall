@@ -255,33 +255,52 @@ func traceToGen(t query.TraceRow) gen.Trace {
 	inputCost := t.InputCostUSD
 	outputCost := t.OutputCostUSD
 	kind := t.Kind
+	// v0.3 cost-attribution fields. We take addresses to populate the
+	// generated type's pointer fields so the JSON response always carries
+	// these keys (rather than omitting them when zero-valued). Note: at
+	// the storage layer, "pre-v0.3 row" and "v0.3 row with default" are
+	// indistinguishable — the CH column DEFAULTs (attempt_number=1,
+	// is_test=false, cost_source='unknown_model') backfill historical
+	// rows on read. We surface the value either way; the dashboard
+	// treats them identically.
+	attemptNumber := int(t.AttemptNumber)
+	isTest := t.IsTest
+	cacheReadCost := t.CacheReadCostUSD
+	costSource := t.CostSource
 	return gen.Trace{
-		OrgId:         t.OrgID,
-		TraceId:       t.TraceID,
-		SpanId:        t.SpanID,
-		ParentSpanId:  t.ParentSpanID,
-		Timestamp:     t.Timestamp.UTC(),
-		Model:         t.Model,
-		Provider:      t.Provider,
-		InputTokens:   int(t.InputTokens),
-		OutputTokens:  int(t.OutputTokens),
-		CostUsd:       t.CostUSD,
-		InputCostUsd:  &inputCost,
-		OutputCostUsd: &outputCost,
-		LatencyMs:     int(t.LatencyMS),
-		TtftMs:        uintPtrToIntPtr(t.TTFTMS),
-		Status:        t.Status,
-		ErrorMessage:  t.ErrorMessage,
-		InputText:     &inputText,
-		OutputText:    &outputText,
-		FeatureName:   t.FeatureName,
-		UserId:        t.UserID,
-		SessionId:     t.SessionID,
-		Environment:   t.Environment,
-		SdkVersion:    &sdkVersion,
-		Extra:         t.Extra,
-		PromptVersion: t.PromptVersion,
-		Kind:          &kind,
+		OrgId:            t.OrgID,
+		TraceId:          t.TraceID,
+		SpanId:           t.SpanID,
+		ParentSpanId:     t.ParentSpanID,
+		Timestamp:        t.Timestamp.UTC(),
+		Model:            t.Model,
+		Provider:         t.Provider,
+		InputTokens:      int(t.InputTokens),
+		OutputTokens:     int(t.OutputTokens),
+		CostUsd:          t.CostUSD,
+		InputCostUsd:     &inputCost,
+		OutputCostUsd:    &outputCost,
+		LatencyMs:        int(t.LatencyMS),
+		TtftMs:           uintPtrToIntPtr(t.TTFTMS),
+		Status:           t.Status,
+		ErrorMessage:     t.ErrorMessage,
+		InputText:        &inputText,
+		OutputText:       &outputText,
+		FeatureName:      t.FeatureName,
+		UserId:           t.UserID,
+		SessionId:        t.SessionID,
+		CustomerId:       t.CustomerID,
+		Environment:      t.Environment,
+		SdkVersion:       &sdkVersion,
+		Extra:            t.Extra,
+		PromptVersion:    t.PromptVersion,
+		Kind:             &kind,
+		AttemptNumber:    &attemptNumber,
+		RetryReason:      t.RetryReason,
+		IsTest:           &isTest,
+		CacheReadCostUsd: &cacheReadCost,
+		CostSource:       &costSource,
+		PricingVersion:   t.PricingVersion,
 	}
 }
 

@@ -42,14 +42,27 @@ type TraceRow struct {
 	FeatureName   *string
 	UserID        *string
 	SessionID     *string
+	// v0.3 — B2B customer / tenant identifier (distinct from UserID).
+	CustomerID    *string
 	Environment   string
 	SDKVersion    string
 	Extra         *string
 	PromptVersion *string
-	// Span discriminator: "llm" (default) or "workflow" (synthetic span
-	// emitted by sdk.trace() so the trace tree has a real parent row).
-	// See schemas/clickhouse/004_span_kind.sql.
+	// Span discriminator: "llm" (default), "workflow", "agent", "step".
+	// agent/step joined the closed set in v0.3 for cost rollups across
+	// the workflow → agent → step hierarchy.
 	Kind string
+	// v0.3 — retry attribution. AttemptNumber defaults to 1; RetryReason
+	// is one of the closed enum values when AttemptNumber > 1.
+	AttemptNumber uint16
+	RetryReason   *string
+	// v0.3 — non-production traffic flag for the dashboard's "Production
+	// only" toggle.
+	IsTest bool
+	// v0.3 — server-derived cost metadata.
+	CacheReadCostUSD float64
+	CostSource       string
+	PricingVersion   *string
 }
 
 type ListTracesArgs struct {
@@ -213,13 +226,24 @@ SELECT
     status, error_message,
     if({is_owner:UInt8}, input_text, '')  AS input_text,
     if({is_owner:UInt8}, output_text, '') AS output_text,
-    feature_name, user_id, session_id, environment, sdk_version,
+    feature_name,
+    -- Identifier columns (user_id / session_id / customer_id) are
+    -- INTENTIONALLY surfaced to viewer-role users alongside owners.
+    -- These are tenant attribution identifiers (slugs / UUIDs / account
+    -- IDs the app assigns), not free-form content. Same convention as
+    -- org_id in every response. If a customer's SDK starts putting raw
+    -- PII into these fields, the policy needs revisiting — see RFC at
+    -- the schema's privacy classification.
+    user_id, session_id, customer_id,
+    environment, sdk_version,
     -- extra is SDK-supplied freeform JSON; could contain PII / debug payload.
     -- Gate on owner role the same way as input_text/output_text so viewers
     -- can't see arbitrary content the customer's SDK chose to attach.
     if({is_owner:UInt8}, extra, NULL) AS extra,
     prompt_version,
-    kind
+    kind,
+    attempt_number, retry_reason, is_test,
+    cache_read_cost_usd, cost_source, pricing_version
 FROM llm_calls
 -- The Traces list page is "your LLM call log" — workflow spans don't fit
 -- the table's columns (model, tokens, cost are all empty). They surface
@@ -249,9 +273,11 @@ LIMIT %d
 			&t.LatencyMS, &t.TTFTMS,
 			&t.Status, &t.ErrorMessage,
 			&t.InputText, &t.OutputText,
-			&t.FeatureName, &t.UserID, &t.SessionID, &t.Environment, &t.SDKVersion, &t.Extra,
+			&t.FeatureName, &t.UserID, &t.SessionID, &t.CustomerID, &t.Environment, &t.SDKVersion, &t.Extra,
 			&t.PromptVersion,
 			&t.Kind,
+			&t.AttemptNumber, &t.RetryReason, &t.IsTest,
+			&t.CacheReadCostUSD, &t.CostSource, &t.PricingVersion,
 		); err != nil {
 			return nil, fmt.Errorf("scan trace: %w", err)
 		}
@@ -286,13 +312,24 @@ SELECT
     status, error_message,
     if({is_owner:UInt8}, input_text, '')  AS input_text,
     if({is_owner:UInt8}, output_text, '') AS output_text,
-    feature_name, user_id, session_id, environment, sdk_version,
+    feature_name,
+    -- Identifier columns (user_id / session_id / customer_id) are
+    -- INTENTIONALLY surfaced to viewer-role users alongside owners.
+    -- These are tenant attribution identifiers (slugs / UUIDs / account
+    -- IDs the app assigns), not free-form content. Same convention as
+    -- org_id in every response. If a customer's SDK starts putting raw
+    -- PII into these fields, the policy needs revisiting — see RFC at
+    -- the schema's privacy classification.
+    user_id, session_id, customer_id,
+    environment, sdk_version,
     -- extra is SDK-supplied freeform JSON; could contain PII / debug payload.
     -- Gate on owner role the same way as input_text/output_text so viewers
     -- can't see arbitrary content the customer's SDK chose to attach.
     if({is_owner:UInt8}, extra, NULL) AS extra,
     prompt_version,
-    kind
+    kind,
+    attempt_number, retry_reason, is_test,
+    cache_read_cost_usd, cost_source, pricing_version
 FROM llm_calls
 -- GetTrace deliberately does NOT filter on kind. The user clicked a
 -- specific span_id from the trace tree or a direct link; that could be
@@ -317,9 +354,11 @@ LIMIT 1
 		&t.LatencyMS, &t.TTFTMS,
 		&t.Status, &t.ErrorMessage,
 		&t.InputText, &t.OutputText,
-		&t.FeatureName, &t.UserID, &t.SessionID, &t.Environment, &t.SDKVersion, &t.Extra,
+		&t.FeatureName, &t.UserID, &t.SessionID, &t.CustomerID, &t.Environment, &t.SDKVersion, &t.Extra,
 		&t.PromptVersion,
 		&t.Kind,
+		&t.AttemptNumber, &t.RetryReason, &t.IsTest,
+		&t.CacheReadCostUSD, &t.CostSource, &t.PricingVersion,
 	)
 	if err != nil {
 		// Only sql.ErrNoRows means "not found" — everything else (timeout,

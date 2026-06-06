@@ -53,10 +53,26 @@ const PRICING_JSON: &str = include_str!("../../../schemas/pricing/pricing.json")
 struct ModelPrice {
     input_price_per_1k_tokens: f64,
     output_price_per_1k_tokens: f64,
+    /// v0.3 — cached-input price per 1k tokens. Anthropic charges ~10% of
+    /// input rate; OpenAI charges ~50%. Optional in JSON: models without
+    /// caching support omit it, and cache_read_cost_usd computes to 0.
+    #[serde(default)]
+    cache_read_price_per_1k_tokens: Option<f64>,
+}
+
+#[derive(Debug, Deserialize)]
+struct MetaSection {
+    /// Date the pricing table was last verified against provider docs.
+    /// Doubles as the "pricing version" attached to every priced event so
+    /// the dashboard can show a confidence indicator and so historical
+    /// re-pricing is auditable.
+    last_verified: String,
 }
 
 #[derive(Debug, Deserialize)]
 struct PricingFile {
+    #[serde(rename = "_meta")]
+    meta: MetaSection,
     models: HashMap<String, ModelPrice>,
     aliases: HashMap<String, String>,
 }
@@ -77,11 +93,22 @@ pub struct Costs {
     pub input_cost_usd: f64,
     pub output_cost_usd: f64,
     pub total_cost_usd: f64,
+    /// v0.3 — cost of the cached portion of input tokens. Anthropic and
+    /// OpenAI both discount cached input significantly (typically 10–50%
+    /// of full input rate); surfacing the saving is a dashboard headline.
+    /// 0.0 when the model's pricing entry has no cache_read rate or when
+    /// the event has no cache_read_tokens.
+    pub cache_read_cost_usd: f64,
 }
 
 pub struct Pricer {
     models: HashMap<String, ModelPrice>,
     aliases: HashMap<String, String>,
+    /// v0.3 — pricing table version stamped on every priced event.
+    /// Sourced from pricing.json `_meta.last_verified`. Lets the dashboard
+    /// label cost numbers with which pricing table produced them, and
+    /// makes historical re-pricing auditable.
+    pricing_version: String,
     /// Tracks models we've already warned about, so we don't spam the log
     /// on every event for a missing model. Lock contention is irrelevant —
     /// HashSet insert is microseconds, and we only hit this path for
@@ -99,8 +126,16 @@ impl Pricer {
         Ok(Self {
             models: file.models,
             aliases: file.aliases,
+            pricing_version: file.meta.last_verified,
             warned: Mutex::new(HashSet::new()),
         })
+    }
+
+    /// v0.3 — pricing-table version (typically a YYYY-MM-DD verification
+    /// date). Stamped on every priced event so the dashboard can label
+    /// cost numbers with which pricing table produced them.
+    pub fn pricing_version(&self) -> &str {
+        &self.pricing_version
     }
 
     /// Resolve a possibly-versioned model ID to its canonical pricing key.
@@ -115,7 +150,20 @@ impl Pricer {
     /// Compute cost from token counts. Returns `Priced` with `costs: None`
     /// when the model is unknown — caller decides whether to zero out or
     /// preserve the SDK value.
-    pub fn price(&self, model: &str, input_tokens: u32, output_tokens: u32) -> Priced {
+    ///
+    /// `cache_read_tokens` is part of input_tokens that came from provider
+    /// cache (Anthropic prompt caching, OpenAI cached_tokens). Pricing
+    /// computes the cache-read portion separately when the model's
+    /// pricing entry includes a cache_read_price; otherwise it's 0 and
+    /// the cached tokens are priced at full input rate (which is what
+    /// older pricing entries already do — backward-compatible).
+    pub fn price(
+        &self,
+        model: &str,
+        input_tokens: u32,
+        output_tokens: u32,
+        cache_read_tokens: u32,
+    ) -> Priced {
         let canonical = self.resolve_model(model).to_owned();
         let Some(p) = self.models.get(&canonical) else {
             // Warn once per unknown model so a new launch (e.g. `o3-mini`)
@@ -136,19 +184,43 @@ impl Pricer {
             };
         };
 
-        let input_cost = (input_tokens as f64 / 1000.0) * p.input_price_per_1k_tokens;
+        // Cache-read cost is computed against the cached portion of input
+        // tokens at a discounted rate. When the pricing entry has no
+        // cache_read rate (legacy entries, models without caching),
+        // cache-read cost is 0 and the cached tokens stay priced at full
+        // input rate in input_cost — which matches the pre-v0.3 behaviour
+        // exactly. Safe-clamp cache_read_tokens to input_tokens since
+        // they're a subset by definition (provider gives us both).
+        let cache_read = cache_read_tokens.min(input_tokens) as f64 / 1000.0;
+        let non_cache_input = input_tokens.saturating_sub(cache_read_tokens) as f64 / 1000.0;
+        let cache_read_cost = match p.cache_read_price_per_1k_tokens {
+            Some(rate) => cache_read * rate,
+            // No cache pricing → don't break input_cost. Cached tokens
+            // get priced at full input rate (input_tokens / 1000 * rate).
+            None => 0.0,
+        };
+        let input_cost = if p.cache_read_price_per_1k_tokens.is_some() {
+            non_cache_input * p.input_price_per_1k_tokens
+        } else {
+            (input_tokens as f64 / 1000.0) * p.input_price_per_1k_tokens
+        };
         let output_cost = (output_tokens as f64 / 1000.0) * p.output_price_per_1k_tokens;
         // Round to 6 decimal places — matches the SDK's behaviour and is the
         // precision ClickHouse will return on aggregate queries.
         let round6 = |x: f64| (x * 1_000_000.0).round() / 1_000_000.0;
         let input_cost = round6(input_cost);
         let output_cost = round6(output_cost);
+        let cache_read_cost = round6(cache_read_cost);
         Priced {
             canonical_model: canonical,
             costs: Some(Costs {
                 input_cost_usd: input_cost,
                 output_cost_usd: output_cost,
-                total_cost_usd: round6(input_cost + output_cost),
+                // Total = input + output + cache. Cache cost is additive
+                // because when a cache rate is defined, input_cost already
+                // excludes the cached portion (see non_cache_input above).
+                total_cost_usd: round6(input_cost + output_cost + cache_read_cost),
+                cache_read_cost_usd: cache_read_cost,
             }),
         }
     }
@@ -165,7 +237,7 @@ mod tests {
     #[test]
     fn known_canonical_model() {
         let pricer = p();
-        let r = pricer.price("gpt-4o", 1000, 1000);
+        let r = pricer.price("gpt-4o", 1000, 1000, 0);
         assert_eq!(r.canonical_model, "gpt-4o");
         let c = r.costs.expect("priced");
         // gpt-4o: $0.0025/1k input, $0.01/1k output
@@ -190,7 +262,7 @@ mod tests {
     fn versioned_resolves_via_alias() {
         let pricer = p();
         // gpt-4o-2024-11-20 → gpt-4o (per pricing.json aliases)
-        let r = pricer.price("gpt-4o-2024-11-20", 1000, 0);
+        let r = pricer.price("gpt-4o-2024-11-20", 1000, 0, 0);
         assert_eq!(r.canonical_model, "gpt-4o");
         assert!(r.costs.is_some());
     }
@@ -198,7 +270,7 @@ mod tests {
     #[test]
     fn unknown_model_returns_none() {
         let pricer = p();
-        let r = pricer.price("gpt-99-future", 1000, 1000);
+        let r = pricer.price("gpt-99-future", 1000, 1000, 0);
         // Canonical falls through to the original string when no alias matches.
         assert_eq!(r.canonical_model, "gpt-99-future");
         assert!(
@@ -226,7 +298,7 @@ mod tests {
     #[test]
     fn zero_tokens_yields_zero_cost() {
         let pricer = p();
-        let r = pricer.price("gpt-4o", 0, 0);
+        let r = pricer.price("gpt-4o", 0, 0, 0);
         let c = r.costs.unwrap();
         assert_eq!(c.input_cost_usd, 0.0);
         assert_eq!(c.output_cost_usd, 0.0);
@@ -239,7 +311,7 @@ mod tests {
         // (banker's rounding via f64::round is even-half but at 6 decimals
         // the result is effectively unambiguous for these inputs).
         let pricer = p();
-        let r = pricer.price("gpt-4o", 1, 0);
+        let r = pricer.price("gpt-4o", 1, 0, 0);
         let c = r.costs.unwrap();
         // The value 0.0000025 rounds to 0.000003 (or 0.000002 depending on
         // f64 representation). The point of the test is that the result is
@@ -258,8 +330,8 @@ mod tests {
         // First call: warns. Second call: silent (warned set short-circuits).
         // We can't easily assert on tracing output here without a subscriber,
         // but we can at least verify the warned set behaviour.
-        let _ = pricer.price("fictional-model", 100, 100);
-        let _ = pricer.price("fictional-model", 100, 100);
+        let _ = pricer.price("fictional-model", 100, 100, 0);
+        let _ = pricer.price("fictional-model", 100, 100, 0);
         let warned = pricer.warned.lock().unwrap();
         assert!(warned.contains("fictional-model"));
         assert_eq!(warned.len(), 1, "should track exactly one unknown model");

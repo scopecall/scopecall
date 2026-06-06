@@ -36,7 +36,8 @@ Quick start:
 API surface:
 
     init(...)          → ScopeCallSDK instance
-    ScopeCallSDK       → trace(name) / workflow(name) /
+    ScopeCallSDK       → trace(name) /
+                         workflow(name) / agent(name) / step(name) /
                          instrument(client, provider="openai"|"anthropic") /
                          record_llm_call(...) / add_redaction_pattern(...) /
                          flush() / close()

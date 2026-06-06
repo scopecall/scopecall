@@ -11,7 +11,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { validate, ConfigError } from "./config.js";
+import { validate, ConfigError, resolveTestFlag } from "./config.js";
 import type { ScopeCallConfig } from "./config.js";
 import { ScopeCallExporter, attachProcessHooks } from "./exporter.js";
 import { trace as contextTrace, storage } from "./context.js";
@@ -43,6 +43,32 @@ export interface ScopeCallSDK {
     fn: (ctx: TraceContext) => Promise<T>,
     opts?: TraceOptions,
   ): Promise<T>;
+
+  /**
+   * Mark a block as a workflow — the top level of the cost-attribution
+   * hierarchy (workflow → agent → step). Equivalent to trace() but reads
+   * more naturally inside instrumented multi-step / agent / RAG code.
+   *
+   * Example:
+   *
+   *     await sdk.workflow("support_refund", async () => {
+   *       await sdk.agent("policy_check", async () => {
+   *         await sdk.step("retrieve_policy", async () => {
+   *           // ...
+   *         });
+   *       });
+   *     });
+   *
+   * Nesting is voluntary, not enforced. The dashboard groups cost / latency
+   * / errors at each level regardless of nesting depth.
+   */
+  workflow<T>(name: string, fn: (ctx: TraceContext) => Promise<T>, opts?: TraceOptions): Promise<T>;
+
+  /** Mark a block as an agent. See `workflow()` for the cost-attribution model. */
+  agent<T>(name: string, fn: (ctx: TraceContext) => Promise<T>, opts?: TraceOptions): Promise<T>;
+
+  /** Mark a block as a step (most granular level). See `workflow()`. */
+  step<T>(name: string, fn: (ctx: TraceContext) => Promise<T>, opts?: TraceOptions): Promise<T>;
 
   /**
    * Instrument a provider's client/model instance so subsequent calls emit
@@ -162,6 +188,20 @@ export function init(config: ScopeCallConfig = {}): ScopeCallSDK {
       }
     },
 
+    // workflow / agent / step — thin aliases over trace() that set the
+    // kind on the emitted container span. The Rust ingest accepts all
+    // three; the dashboard groups cost by kind so workflow/agent/step
+    // each form their own roll-up level.
+    workflow<T>(name: string, fn: (ctx: TraceContext) => Promise<T>, opts?: TraceOptions): Promise<T> {
+      return this.trace(name, fn, { ...opts, kind: "workflow" });
+    },
+    agent<T>(name: string, fn: (ctx: TraceContext) => Promise<T>, opts?: TraceOptions): Promise<T> {
+      return this.trace(name, fn, { ...opts, kind: "agent" });
+    },
+    step<T>(name: string, fn: (ctx: TraceContext) => Promise<T>, opts?: TraceOptions): Promise<T> {
+      return this.trace(name, fn, { ...opts, kind: "step" });
+    },
+
     instrument(
       client: unknown,
       provider: "openai" | "anthropic" | "vercel-ai" = "openai",
@@ -197,22 +237,29 @@ export function init(config: ScopeCallConfig = {}): ScopeCallSDK {
 // ---------------------------------------------------------------------------
 
 function makeDisabledSDK(): ScopeCallSDK {
-  return {
-    disabled: true,
-    async trace<T>(
-      _name: string,
+  const traceWithKind = (kind: "workflow" | "agent" | "step") =>
+    async <T>(
+      name: string,
       fn: (ctx: TraceContext) => Promise<T>,
-      _opts?: TraceOptions,
-    ): Promise<T> {
+      opts?: TraceOptions,
+    ): Promise<T> => {
       const ctx: TraceContext = {
         traceId: randomUUID(),
         spanId: randomUUID(),
         parentSpanId: null,
-        name: _name,
-        promptVersion: _opts?.promptVersion ?? null,
+        name,
+        promptVersion: opts?.promptVersion ?? null,
+        kind: opts?.kind ?? kind,
+        customerId: opts?.customerId ?? null,
       };
       return storage.run(ctx, () => fn(ctx));
-    },
+    };
+  return {
+    disabled: true,
+    trace: traceWithKind("workflow"),
+    workflow: traceWithKind("workflow"),
+    agent: traceWithKind("agent"),
+    step: traceWithKind("step"),
     instrument(): void { /* no-op */ },
     async flush(): Promise<void> { /* no-op */ },
     async close(): Promise<void> { /* no-op */ },
@@ -222,12 +269,15 @@ function makeDisabledSDK(): ScopeCallSDK {
 // Re-export trace standalone for users who don't need the full SDK object
 export { contextTrace as trace };
 
-// ─── Workflow-span emission ──────────────────────────────────────────────
+// ─── Container-span emission ─────────────────────────────────────────────
 //
-// The synthetic event sdk.trace() emits at end-of-block. Same wire shape
-// as an LLM event (LLMEvent), but with kind="workflow" and zero values for
-// the LLM-specific fields. Stored as a row in llm_calls with kind='workflow'
-// so the trace-tree JOIN finds a real parent for the LLM-call children.
+// The synthetic event each sdk.trace() / sdk.workflow() / sdk.agent() /
+// sdk.step() emits at end-of-block. Same wire shape as an LLM event
+// (LLMEvent), but with kind set to the container value (one of
+// "workflow" | "agent" | "step") and zero values for the LLM-specific
+// fields. Stored as a row in llm_calls with that kind so the trace-tree
+// JOIN finds a real parent for the LLM-call children, and so the
+// cost-attribution rollups can group by workflow / agent / step level.
 //
 // What we DELIBERATELY omit / zero out:
 //   - model / provider — empty strings; this isn't a provider call.
@@ -278,6 +328,7 @@ function buildWorkflowEvent(args: BuildWorkflowEventArgs): LLMEvent {
     feature_name: ctx.name ?? config.defaultFeature ?? null,
     user_id: config.defaultUserId ?? null,
     session_id: config.defaultSessionId ?? null,
+    customer_id: ctx.customerId,
     environment: config.environment ?? "production",
     sdk_version: sdkVersion,
     extra: null,
@@ -288,6 +339,9 @@ function buildWorkflowEvent(args: BuildWorkflowEventArgs): LLMEvent {
     failure_mode: null,
     tool_calls: null,
     prompt_version: ctx.promptVersion ?? config.defaultPromptVersion ?? null,
-    kind: "workflow",
+    kind: ctx.kind,
+    attempt_number: 1,
+    retry_reason: null,
+    is_test: resolveTestFlag(config),
   };
 }

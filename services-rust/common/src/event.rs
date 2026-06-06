@@ -77,6 +77,50 @@ pub struct LlmEvent {
     pub user_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub session_id: Option<String>,
+    /// B2B customer / tenant identifier. Distinct from `user_id` (end-user).
+    /// Powers per-customer cost attribution on the dashboard. Optional with
+    /// `#[serde(default)]` so pre-v0.3 SDKs (which don't send the field)
+    /// keep working — they store NULL on the ClickHouse column. (v0.3)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub customer_id: Option<String>,
+
+    /// v0.3 — 1-based attempt index from the caller's perspective. Default 1.
+    /// Increments only when the APPLICATION retries; provider-SDK-internal
+    /// retries are not counted (they don't add to your bill).
+    #[serde(default = "default_attempt_number")]
+    pub attempt_number: u16,
+
+    /// v0.3 — reason for this retry. None on attempt 1. Validated against the
+    /// closed enum {rate_limit, timeout, server_error, transient_network,
+    /// agent_decision, manual, unknown}.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub retry_reason: Option<String>,
+
+    /// v0.3 — true for non-production traffic (eval suites, CI, smoke tests,
+    /// replays, backfills). Dashboard's "Production only" toggle filters
+    /// these out so they don't inflate cost reports.
+    #[serde(default)]
+    pub is_test: bool,
+
+    /// v0.3 — cost of the cached portion of input tokens (Anthropic /
+    /// OpenAI prompt caching discounts). Derived server-side in the
+    /// processor's reprice(); never SDK-supplied.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cache_read_cost_usd: Option<f64>,
+
+    /// v0.3 — trust signal for cost_usd. Derived server-side; one of:
+    ///   "server_computed" - reprice() set cost from the pricing table
+    ///   "sdk_fallback"    - model unknown to pricing table; kept SDK cost
+    ///   "unknown_model"   - model unknown AND SDK cost was 0
+    /// Lets the dashboard show a confidence indicator next to costs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cost_source: Option<String>,
+
+    /// v0.3 — pricing-table version that produced cost_usd (typically a
+    /// YYYY-MM-DD verification date). Stamped by reprice(); never SDK-
+    /// supplied. Makes historical re-pricing auditable.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pricing_version: Option<String>,
 
     // Metadata
     pub environment: String,
@@ -118,6 +162,11 @@ pub struct LlmEvent {
 /// and is definitionally an LLM call (workflow spans require the field).
 fn default_kind() -> String {
     "llm".to_owned()
+}
+
+/// v0.3 — pre-0.3 SDKs don't emit attempt_number; assume first attempt.
+fn default_attempt_number() -> u16 {
+    1
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -185,6 +234,48 @@ impl LlmEvent {
         check_opt("parent_span_id", &self.parent_span_id, MAX_ID_LEN)?;
         check_opt("user_id", &self.user_id, MAX_ID_LEN)?;
         check_opt("session_id", &self.session_id, MAX_ID_LEN)?;
+        check_opt("customer_id", &self.customer_id, MAX_ID_LEN)?;
+
+        // v0.3 retry_reason closed enum. None or one of the documented
+        // reasons. Reject anything else so the ClickHouse LowCardinality
+        // dictionary stays bounded and the dashboard can render named
+        // categories without an "(unknown values…)" bucket leaking in.
+        if let Some(reason) = &self.retry_reason {
+            match reason.as_str() {
+                "rate_limit"
+                | "timeout"
+                | "server_error"
+                | "transient_network"
+                | "agent_decision"
+                | "manual"
+                | "unknown" => {}
+                other => {
+                    return Err(ValidationError(format!(
+                        "retry_reason must be one of \
+                         'rate_limit' | 'timeout' | 'server_error' | \
+                         'transient_network' | 'agent_decision' | 'manual' | \
+                         'unknown', got {:?}",
+                        other,
+                    )))
+                }
+            }
+        }
+        // attempt_number sanity: bounded UInt16 already caps at 65535;
+        // a real retry loop running 65k attempts is a different problem.
+        // Reject 0 (1-based per the docstring); allow up to MAX_ATTEMPTS
+        // to catch buggy SDKs sending bogus values.
+        const MAX_ATTEMPTS: u16 = 1000;
+        if self.attempt_number == 0 {
+            return Err(ValidationError(
+                "attempt_number must be >= 1 (1 = first attempt)".to_owned(),
+            ));
+        }
+        if self.attempt_number > MAX_ATTEMPTS {
+            return Err(ValidationError(format!(
+                "attempt_number ({}) exceeds sanity bound {}",
+                self.attempt_number, MAX_ATTEMPTS,
+            )));
+        }
 
         // Labels
         check_len("model", &self.model, MAX_LABEL_LEN)?;
@@ -197,17 +288,21 @@ impl LlmEvent {
         // because it ends up on a ClickHouse LowCardinality column and a
         // multi-KB value there causes catastrophic dict explosion.
         check_opt("prompt_version", &self.prompt_version, MAX_LABEL_LEN)?;
-        // kind is a small enum ("llm" | "workflow") but defensive bound.
         // kind is an enum, not a free-form label. Reject anything outside
         // the closed set so a hostile / buggy SDK can't push arbitrary
         // strings into the LowCardinality dictionary AND can't bypass the
-        // processor's "skip pricing for workflow rows" gate by claiming
-        // kind="workflow" with a real cost. (Round-4 review P1.)
+        // processor's "skip pricing for container rows" gate by claiming
+        // a container kind with a real cost. (Round-4 review P1.)
+        //
+        // v0.3 expansion: agent + step join workflow as container kinds.
+        // They share workflow's semantics (no model, no tokens, no cost
+        // of their own — they aggregate children). The processor's
+        // reprice() treats all three identically.
         match self.kind.as_str() {
-            "llm" | "workflow" => {}
+            "llm" | "workflow" | "agent" | "step" => {}
             other => {
                 return Err(ValidationError(format!(
-                    "kind must be 'llm' or 'workflow', got {:?}",
+                    "kind must be one of 'llm' | 'workflow' | 'agent' | 'step', got {:?}",
                     other,
                 )))
             }

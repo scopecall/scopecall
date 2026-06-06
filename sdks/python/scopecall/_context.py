@@ -70,9 +70,23 @@ class TraceContext:
     session_id: str | None = None
     feature_name: str | None = None
 
+    # B2B customer / tenant identifier. Inherited from parent traces like
+    # user_id; explicit kwarg on trace() / workflow() / agent() / step()
+    # overrides. None means "no customer attribution" — the dashboard's
+    # cost-by-customer view shows these rows as "(unattributed)". (v0.3)
+    customer_id: str | None = None
+
     # Wall-clock start time (ms epoch). Used to compute the workflow
     # span's latency when the block exits.
     start_time_ms: float = field(default=0.0)
+
+    # Container kind for the synthetic span emitted on block exit. One of
+    # "workflow" | "agent" | "step". sdk.trace() defaults to "workflow"
+    # for backward compatibility; sdk.workflow() / sdk.agent() / sdk.step()
+    # set this explicitly so the dashboard can group cost by level.
+    # The Rust ingest enforces the closed enum {llm, workflow, agent, step}
+    # — see services-rust/common/src/event.rs.
+    kind: str = "workflow"
 
 
 # Module-level ContextVar. The reset-token pattern below is what

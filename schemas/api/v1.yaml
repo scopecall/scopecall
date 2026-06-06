@@ -199,6 +199,12 @@ components:
         session_id:
           type: string
           nullable: true
+        customer_id:
+          type: string
+          nullable: true
+          description: >
+            B2B customer / tenant identifier (distinct from user_id, which
+            is the end-user). Powers per-customer cost attribution. (v0.3)
         environment:
           type: string
         sdk_version:
@@ -216,13 +222,59 @@ components:
             ScopeCallConfig.defaultPromptVersion. Powers the Prompts page.
         kind:
           type: string
-          enum: [llm, workflow]
+          enum: [llm, workflow, agent, step]
           description: >
-            Span discriminator. `llm` is an instrumented provider call
-            (the default). `workflow` is the synthetic span emitted by
-            sdk.trace() so the trace tree has a real parent row.
-            Workflow rows have empty model/provider, zero tokens, zero
-            cost — see schemas/clickhouse/004_span_kind.sql.
+            Span kind. `llm` = an instrumented provider call; the other three
+            are container spans (no model/tokens/cost of their own) that
+            aggregate cost from their LLM descendants. workflow → agent → step
+            is the conventional hierarchy but nesting is not enforced. (v0.3)
+        attempt_number:
+          type: integer
+          minimum: 1
+          description: >
+            1-based caller-attempt index. Increments only when the application
+            retries (not provider-SDK-internal retries). Default 1. (v0.3)
+        retry_reason:
+          type: string
+          nullable: true
+          enum:
+            - rate_limit
+            - timeout
+            - server_error
+            - transient_network
+            - agent_decision
+            - manual
+            - unknown
+          description: >
+            Reason for this retry; null on attempt 1. (v0.3)
+        is_test:
+          type: boolean
+          description: >
+            True for non-production traffic (eval, CI, smoke tests, replays,
+            backfills). The dashboard's "Production only" toggle filters by
+            this. (v0.3)
+        cache_read_cost_usd:
+          type: number
+          format: double
+          description: >
+            Cost of the cached input-token portion. Server-derived from the
+            pricing table; 0 when the model has no cache_read rate or no
+            cached tokens were read. (v0.3)
+        cost_source:
+          type: string
+          enum: [server_computed, sdk_fallback, unknown_model, container]
+          description: >
+            Trust signal for cost_usd. server_computed = priced from the
+            pricing table; sdk_fallback = SDK-supplied because the model
+            was unknown; unknown_model = no cost data available;
+            container = synthetic span (workflow / agent / step) that
+            has no model of its own. (v0.3)
+        pricing_version:
+          type: string
+          nullable: true
+          description: >
+            Pricing-table version that produced cost_usd
+            (YYYY-MM-DD verification date). (v0.3)
 
     TraceListResponse:
       type: object

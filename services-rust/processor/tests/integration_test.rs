@@ -18,13 +18,22 @@ use std::sync::{Arc, Mutex};
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 fn make_test_event(trace_id: &str) -> EnrichedEvent {
+    // Use a current timestamp — the llm_calls table has a 90-day TTL on
+    // the timestamp column, so an old fixed timestamp would be invisible
+    // to SELECT (the part exists in system.parts but is filtered out as
+    // expired). Use millis-since-epoch for now() so the event lands
+    // inside the live retention window.
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as f64)
+        .unwrap_or(0.0);
     EnrichedEvent {
         org_id: "org_test".to_owned(),
         event: LlmEvent {
             trace_id: trace_id.to_owned(),
             span_id: "span_1".to_owned(),
             parent_span_id: None,
-            timestamp: 1_716_379_200_000.0,
+            timestamp: now_ms,
             latency_ms: 150,
             ttft_ms: None,
             model: "gpt-4o-mini".to_owned(),
@@ -45,6 +54,13 @@ fn make_test_event(trace_id: &str) -> EnrichedEvent {
             feature_name: None,
             user_id: None,
             session_id: None,
+                customer_id: None,
+                attempt_number: 1,
+                retry_reason: None,
+                is_test: false,
+                cache_read_cost_usd: None,
+                cost_source: None,
+                pricing_version: None,
             environment: "test".to_owned(),
             sdk_version: "0.1.0".to_owned(),
             extra: None,
@@ -176,12 +192,28 @@ async fn dlq_retry_exhaustion_no_docker() {
 #[tokio::test]
 #[ignore = "requires Docker — run explicitly with --include-ignored"]
 async fn ch_writer_roundtrip() {
-    use testcontainers::{core::WaitFor, runners::AsyncRunner, GenericImage};
+    use testcontainers::{core::WaitFor, runners::AsyncRunner, GenericImage, ImageExt};
 
-    // Start ClickHouse container
+    // Start ClickHouse container.
+    //
+    // Wait strategy: the 24.3 image's entrypoint.sh redirects all server
+    // logs to /var/log/clickhouse-server/clickhouse-server.log inside the
+    // container — so WaitFor::message_on_stdout("Ready for connections.")
+    // never fires and the test times out at 60s. Instead, wait for a
+    // healthcheck-style HTTP response on the exposed 8123 port (below),
+    // which is the actual readiness condition we care about.
+    //
+    // Auth: CH 24.x disables network access for the 'default' user when
+    // neither CLICKHOUSE_USER nor CLICKHOUSE_PASSWORD is set. We set
+    // both explicitly so the test's DDL POSTs work. Production uses an
+    // allow_default.xml config (infra/self-hosted/clickhouse-users/)
+    // that takes a different approach; both are valid.
     let ch_image = GenericImage::new("clickhouse/clickhouse-server", "24.3")
         .with_exposed_port(8123u16.into())
-        .with_wait_for(WaitFor::message_on_stdout("Ready for connections."));
+        .with_wait_for(WaitFor::seconds(10))
+        .with_env_var("CLICKHOUSE_USER", "default")
+        .with_env_var("CLICKHOUSE_PASSWORD", "test")
+        .with_env_var("CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT", "1");
 
     let container = ch_image
         .start()
@@ -193,21 +225,75 @@ async fn ch_writer_roundtrip() {
         .await
         .expect("get ClickHouse port");
 
-    let ch_url = format!("http://127.0.0.1:{ch_port}");
+    // Use HTTP Basic auth for both readiness poll and DDL POSTs.
+    let ch_url = format!("http://default:test@127.0.0.1:{ch_port}");
 
-    // Create llm_calls table using the canonical DDL
-    let ddl = include_str!("../../../schemas/clickhouse/001_initial.sql");
+    // Poll /ping until the HTTP interface responds (or fail after ~30s).
+    // The seconds-wait above is a coarse floor; this confirms ready-state
+    // before we try to send DDL. Without this, the DDL POST races
+    // ClickHouse's HTTP handler initialisation on cold-start.
     let http = reqwest::Client::new();
-    http.post(&ch_url)
-        .body(ddl)
-        .send()
-        .await
-        .expect("DDL request failed")
-        .error_for_status()
-        .expect("DDL failed");
+    let mut ready = false;
+    for _ in 0..60 {
+        match http.get(format!("{ch_url}/ping")).send().await {
+            Ok(r) if r.status().is_success() => {
+                ready = true;
+                break;
+            }
+            _ => tokio::time::sleep(std::time::Duration::from_millis(500)).await,
+        }
+    }
+    assert!(ready, "ClickHouse /ping never returned 200");
 
-    // Insert one event via ClickHouseWriter
-    let ch_client = clickhouse::Client::default().with_url(&ch_url);
+    // Apply all migrations in order so the test schema matches the
+    // production layout. Otherwise inserts of v0.3+ rows fail because
+    // the LlmCallRow struct binds columns the base 001 schema doesn't
+    // have. Concat-and-send rather than one-statement-per-request to
+    // keep this test fast.
+    let migrations = [
+        include_str!("../../../schemas/clickhouse/001_initial.sql"),
+        include_str!("../../../schemas/clickhouse/002_trace_id_skip_index.sql"),
+        include_str!("../../../schemas/clickhouse/003_prompt_version.sql"),
+        include_str!("../../../schemas/clickhouse/004_span_kind.sql"),
+        include_str!("../../../schemas/clickhouse/005_kind_aware_rollup.sql"),
+        include_str!("../../../schemas/clickhouse/006_customer_id.sql"),
+        include_str!("../../../schemas/clickhouse/007_retry_and_test_flag.sql"),
+        include_str!("../../../schemas/clickhouse/008_cost_metadata.sql"),
+    ];
+    // CH's HTTP interface accepts ONE statement per request. The migration
+    // files contain multiple statements separated by semicolons (CREATE
+    // TABLE + CREATE MATERIALIZED VIEW + ALTER + ADD INDEX etc.). Strip
+    // comments, split on top-level `;`, and POST each non-empty piece.
+    for sql in migrations {
+        let stripped: String = sql
+            .lines()
+            .filter(|line| !line.trim_start().starts_with("--"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        for stmt in stripped.split(';') {
+            let stmt = stmt.trim();
+            if stmt.is_empty() {
+                continue;
+            }
+            http.post(&ch_url)
+                .body(stmt.to_owned())
+                .send()
+                .await
+                .expect("DDL request failed")
+                .error_for_status()
+                .unwrap_or_else(|e| panic!("DDL failed for stmt {:.60}…: {}", stmt, e));
+        }
+    }
+
+    // Insert one event via ClickHouseWriter. Strip the user:pass from
+    // the URL for the clickhouse-rs client and pass them via with_user
+    // / with_password instead — the crate parses URLs with embedded
+    // credentials inconsistently across versions.
+    let ch_url_noauth = format!("http://127.0.0.1:{ch_port}");
+    let ch_client = clickhouse::Client::default()
+        .with_url(&ch_url_noauth)
+        .with_user("default")
+        .with_password("test");
     let writer = ClickHouseWriter::new(ch_client.clone());
 
     let event = make_test_event("trace-ch-roundtrip");

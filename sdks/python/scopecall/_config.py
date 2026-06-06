@@ -12,6 +12,7 @@ same contract — fail loud with a `ConfigError` that names the fix.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 
 
@@ -71,6 +72,14 @@ class ScopeCallConfig:
     default_user_id: str | None = None
     default_session_id: str | None = None
 
+    # v0.3 — when True, every event is tagged is_test=True. Use this for
+    # eval suites, CI runs, smoke tests, replays, and backfills so the
+    # dashboard can exclude them from production cost reports. Also
+    # settable via the SCOPECALL_TEST=true env var (resolved in
+    # __post_init__). Tri-state: None means "consult env"; True/False
+    # is an explicit override of the env var.
+    test: bool | None = None
+
     # Round-4 review (TS): default_prompt_version tags every call with a
     # build/commit/release identifier when the app has a single canonical
     # prompt set. Per-trace prompt_version wins, then parent trace's
@@ -83,6 +92,16 @@ class ScopeCallConfig:
         # probably meant "flush often" and we want to be forgiving.
         if self.flush_interval <= 0:
             self.flush_interval = 0.1
+
+        # v0.3 — resolve the test flag. Tri-state: None means "consult
+        # the SCOPECALL_TEST env var"; explicit True/False overrides.
+        # Common pattern: pytest fixtures and CI pipelines set
+        # SCOPECALL_TEST=true once at the process level so every run
+        # gets tagged is_test=True without app-code changes.
+        if self.test is None:
+            self.test = os.environ.get("SCOPECALL_TEST", "").lower() in (
+                "1", "true", "yes", "on",
+            )
 
     @property
     def mode(self) -> str:

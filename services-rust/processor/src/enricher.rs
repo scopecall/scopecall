@@ -92,12 +92,14 @@ impl Enricher {
     /// When the model is unknown, preserve the SDK-supplied cost_usd as a
     /// fallback (better than zeroing out on the day a new model launches).
     fn reprice(&self, event: &mut common::event::EnrichedEvent) {
-        // Workflow spans are synthetic containers — no model, no tokens,
-        // no cost. NORMALISE these fields server-side so a buggy / hostile
-        // SDK can't ship kind="workflow" with cost=999999 and poison the
-        // (kind-aware) analytics. Trust the kind discriminator, not the
-        // SDK-supplied content for that kind. (Round-4 review P1.)
-        if event.event.kind == "workflow" {
+        // Container spans (workflow / agent / step) are synthetic — no
+        // model, no tokens, no cost of their own. They aggregate cost
+        // from their LLM descendants. NORMALISE these fields server-side
+        // so a buggy / hostile SDK can't ship a container kind with
+        // cost=999999 and poison the (kind-aware) analytics. Trust the
+        // kind discriminator, not the SDK-supplied content for that kind.
+        // (Round-4 review P1; expanded for v0.3 agent/step kinds.)
+        if matches!(event.event.kind.as_str(), "workflow" | "agent" | "step") {
             event.event.model = String::new();
             event.event.provider = String::new();
             event.event.input_tokens = 0;
@@ -105,28 +107,67 @@ impl Enricher {
             event.event.cost_usd = 0.0;
             event.event.input_cost_usd = Some(0.0);
             event.event.output_cost_usd = Some(0.0);
+            event.event.cache_read_cost_usd = Some(0.0);
             event.event.cache_read_tokens = None;
+            // Stamp cost_source as "container" so the dashboard's cost-
+            // confidence indicator can distinguish synthetic spans from
+            // real LLM calls. Without this the writer's unwrap_or default
+            // would label every workflow/agent/step row as "unknown_model",
+            // which is misleading — these rows simply have no model.
+            // Pricing_version stays None: there's nothing to version.
+            event.event.cost_source = Some("container".to_owned());
             return;
         }
         let priced = self.pricer.price(
             &event.event.model,
             event.event.input_tokens,
             event.event.output_tokens,
+            event.event.cache_read_tokens.unwrap_or(0),
         );
         // Normalize the model field to its canonical name so all downstream
         // queries (cost-by-model, top-movers) group versioned and canonical
         // IDs together instead of splitting them into separate buckets.
         event.event.model = priced.canonical_model;
 
+        // v0.3 — stamp every priced row with which pricing table produced
+        // it, regardless of whether server pricing succeeded. Lets the
+        // dashboard label cost numbers and makes re-pricing auditable.
+        event.event.pricing_version = Some(self.pricer.pricing_version().to_owned());
+
         if let Some(c) = priced.costs {
             event.event.cost_usd = c.total_cost_usd;
             event.event.input_cost_usd = Some(c.input_cost_usd);
             event.event.output_cost_usd = Some(c.output_cost_usd);
+            event.event.cache_read_cost_usd = Some(c.cache_read_cost_usd);
+            event.event.cost_source = Some("server_computed".to_owned());
+        } else {
+            // Model unknown. Leave cost_usd as SDK supplied; components
+            // stay None. ClickHouse columns will hold 0 (DEFAULT 0) which
+            // makes it visually obvious in queries that components weren't
+            // computed server-side — distinct from a legitimate $0 call.
+            // cost_source tracks WHY a value is in cost_usd:
+            //   sdk_fallback   = SDK gave us a non-zero cost, we kept it.
+            //   unknown_model  = SDK gave us 0 and we couldn't price it.
+            //
+            // KNOWN GAP: when the model is unknown, cache_read_cost_usd
+            // stays None even though the SDK reported a non-zero
+            // cache_read_tokens. The dashboard's cache-savings widget
+            // under-reports by exactly the cache-read portion of
+            // unknown-model calls. We accept this gap because shipping
+            // cache cost from the SDK would regress the design that
+            // made the server pricing-authoritative and removed SDK-side
+            // pricing tables. Unknown-model calls are rare in steady
+            // state — mainly the path on the day a provider ships a new
+            // model. Operators get the data back the moment they add
+            // the model to pricing.json and re-process.
+            event.event.cost_source = Some(
+                if event.event.cost_usd > 0.0 {
+                    "sdk_fallback".to_owned()
+                } else {
+                    "unknown_model".to_owned()
+                },
+            );
         }
-        // else: model unknown. Leave cost_usd as SDK supplied; components
-        // stay None. ClickHouse columns will hold 0 (DEFAULT 0) which makes
-        // it visually obvious in queries that components weren't computed
-        // server-side — distinct from a legitimate $0 call.
     }
 }
 
@@ -178,6 +219,13 @@ mod tests {
                 feature_name: None,
                 user_id: None,
                 session_id: None,
+                customer_id: None,
+                attempt_number: 1,
+                retry_reason: None,
+                is_test: false,
+                cache_read_cost_usd: None,
+                cost_source: None,
+                pricing_version: None,
                 environment: "test".into(),
                 sdk_version: "test".into(),
                 extra: None,
@@ -230,21 +278,36 @@ mod tests {
         // bypass server-side pricing AND poison kind-aware analytics
         // (workflows are aggregated separately). Force the workflow's
         // LLM-call fields to zero/empty server-side regardless of input.
-        let enricher = Enricher::load().expect("load");
-        let mut ev = sample_event("evil-model", 999_999, 999_999, 9_999.99);
-        ev.event.kind = "workflow".to_owned();
-        ev.event.provider = "fake".to_owned();
-        ev.event.cache_read_tokens = Some(42);
-        enricher.enrich(&mut ev);
-        assert_eq!(ev.event.kind, "workflow");
-        assert_eq!(ev.event.model, "");
-        assert_eq!(ev.event.provider, "");
-        assert_eq!(ev.event.input_tokens, 0);
-        assert_eq!(ev.event.output_tokens, 0);
-        assert_eq!(ev.event.cost_usd, 0.0);
-        assert_eq!(ev.event.input_cost_usd, Some(0.0));
-        assert_eq!(ev.event.output_cost_usd, Some(0.0));
-        assert_eq!(ev.event.cache_read_tokens, None);
+        //
+        // v0.3 expansion: same rule applies to agent + step container
+        // kinds. Parameterised so adding a new container kind here is
+        // a one-line change.
+        for kind in ["workflow", "agent", "step"] {
+            let enricher = Enricher::load().expect("load");
+            let mut ev = sample_event("evil-model", 999_999, 999_999, 9_999.99);
+            ev.event.kind = kind.to_owned();
+            ev.event.provider = "fake".to_owned();
+            ev.event.cache_read_tokens = Some(42);
+            enricher.enrich(&mut ev);
+            assert_eq!(ev.event.kind, kind, "kind preserved");
+            assert_eq!(ev.event.model, "", "model zeroed for kind={kind}");
+            assert_eq!(ev.event.provider, "", "provider zeroed for kind={kind}");
+            assert_eq!(ev.event.input_tokens, 0, "input_tokens zeroed for kind={kind}");
+            assert_eq!(ev.event.output_tokens, 0, "output_tokens zeroed for kind={kind}");
+            assert_eq!(ev.event.cost_usd, 0.0, "cost_usd zeroed for kind={kind}");
+            assert_eq!(ev.event.input_cost_usd, Some(0.0), "input_cost zeroed for kind={kind}");
+            assert_eq!(ev.event.output_cost_usd, Some(0.0), "output_cost zeroed for kind={kind}");
+            assert_eq!(ev.event.cache_read_tokens, None, "cache_read_tokens zeroed for kind={kind}");
+            assert_eq!(
+                ev.event.cost_source.as_deref(),
+                Some("container"),
+                "cost_source set to 'container' for kind={kind}",
+            );
+            assert_eq!(
+                ev.event.pricing_version, None,
+                "container rows have no pricing_version (kind={kind})",
+            );
+        }
     }
 
     #[test]

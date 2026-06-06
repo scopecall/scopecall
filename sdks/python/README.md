@@ -383,7 +383,8 @@ Every traced LLM call captures:
 | `tool_calls` | Tool-use blocks as JSON (Anthropic) |
 | `prompt_version` | Per-trace label from `sdk.trace()` or config — powers the Prompts page |
 | `feature_name` / `user_id` / `session_id` | From `sdk.trace()` or `init()` defaults |
-| `kind` | `llm` for provider calls, `workflow` for `sdk.trace()` blocks |
+| `kind` | `llm` for provider calls; `workflow` / `agent` / `step` for container spans from `sdk.trace()` / `sdk.workflow()` / `sdk.agent()` / `sdk.step()` |
+| `customer_id` | B2B tenant identifier. **Must be a tenant / account slug or opaque ID, not raw email / name / PII** — viewer-role users can read it alongside `user_id` / `session_id`. |
 
 ---
 

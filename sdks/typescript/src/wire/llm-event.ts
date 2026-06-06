@@ -47,6 +47,22 @@ export interface LLMEvent {
   feature_name: string | null;
   user_id: string | null;
   session_id: string | null;
+  /**
+   * B2B customer / tenant identifier. Distinct from `user_id` (end-user).
+   * Set via the `customerId` opt on sdk.trace() / workflow() / agent() /
+   * step(); inherited from parent spans like `user_id`. Powers per-
+   * customer cost attribution on the dashboard. (v0.3)
+   *
+   * PII CONTRACT — customer_id MUST be a tenant / account slug or
+   * opaque ID (e.g. "customer_acme", "org_4adb529080de4df8"). Do NOT
+   * put raw email addresses, names, or other PII here. The dashboard
+   * surfaces this field to viewer-role users alongside user_id and
+   * session_id; gating on owner-role is intentionally NOT applied
+   * because customer_id is treated as an identifier, not content.
+   * If your app needs to attach PII for support workflows, use
+   * `extra` (gated on owner-role) instead.
+   */
+  customer_id: string | null;
 
   // Metadata
   environment: string;
@@ -72,20 +88,65 @@ export interface LLMEvent {
   prompt_version: string | null;
 
   /**
+   * v0.3 retry attribution. attempt_number is 1-based; default 1 means
+   * "first attempt." Set by the caller when the application is doing its
+   * own retry loop and wants those retries surfaced in cost reports.
+   * Provider-SDK-internal retries (openai-py / anthropic-sdk) are not
+   * counted — they don't add to your bill.
+   */
+  attempt_number?: number;
+  /**
+   * v0.3 — reason for this retry; null on attempt 1. Ingest enforces:
+   * "rate_limit" | "timeout" | "server_error" | "transient_network" |
+   * "agent_decision" | "manual" | "unknown".
+   */
+  retry_reason?: string | null;
+  /**
+   * v0.3 — true when the call is from a non-production run (eval suite,
+   * CI, smoke test, replay, backfill). Lets the dashboard exclude these
+   * from cost reports by default — eval/CI typically dominate cost on
+   * staging environments and inflate "production cost" if blended.
+   */
+  is_test?: boolean;
+
+  /**
+   * v0.3 — server-derived cost metadata. SERVER-DERIVED: do not set
+   * these in SDK code or instrumentation. The Rust processor's reprice()
+   * unconditionally overwrites them after server-side pricing, so any
+   * value set here is discarded. They live on the wire type because it
+   * doubles as the canonical record shape the dashboard reads back via
+   * the API.
+   *
+   * cost_source legal values (closed enum enforced by the processor):
+   *   "server_computed" - priced from the pricing table
+   *   "sdk_fallback"    - model unknown; kept SDK cost
+   *   "unknown_model"   - model unknown AND SDK cost was 0
+   *   "container"       - workflow / agent / step row (no model)
+   */
+  cache_read_cost_usd?: number | null;
+  cost_source?: string | null;
+  pricing_version?: string | null;
+
+  /**
    * Discriminator for the span kind:
    *   - "llm": an instrumented provider call (OpenAI / Anthropic / Vercel AI).
    *           Has model + tokens + cost.
-   *   - "workflow": a synthetic span emitted by sdk.trace(). NO model, NO
-   *           tokens, NO cost — just a container that LLM-call rows hang
-   *           under via parent_span_id. Without these rows in storage the
-   *           trace tree query `JOIN ON child.parent_span_id = parent.span_id`
-   *           returns no parent, and the "workflow debugger" claim is
-   *           cosmetic. (Round-3 external review P0.)
+   *   - "workflow" | "agent" | "step": synthetic container spans emitted
+   *           by sdk.trace() / sdk.workflow() / sdk.agent() / sdk.step().
+   *           NO model, NO tokens, NO cost — just containers that LLM-call
+   *           rows hang under via parent_span_id. Without these rows in
+   *           storage the trace tree query `JOIN ON child.parent_span_id
+   *           = parent.span_id` returns no parent. The three container
+   *           kinds form the workflow → agent → step hierarchy the v0.3
+   *           cost-attribution dashboards roll up against. The Rust
+   *           ingest validates the closed set { llm | workflow | agent |
+   *           step } and rejects anything else. (Round-3 external review
+   *           P0 for workflow; v0.3 for agent + step.)
    *
    * Optional on the wire for backwards compatibility — pre-v0.1.2 SDKs
    * don't send it. Ingest defaults to "llm" when absent.
    */
-  kind?: "llm" | "workflow";
+  kind?: "llm" | "workflow" | "agent" | "step";
 }
 
 /** JSON.stringify replacer: undefined → null so wire format is fully defined */

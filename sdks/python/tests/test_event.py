@@ -44,10 +44,10 @@ class TestLLMEventFields:
         assert self._minimal().status == "success"
 
     def test_default_kind_is_llm(self):
-        # Round-4: kind defaults to 'llm'; workflow spans set it
-        # explicitly. The Rust ingest validates the field is one of
-        # 'llm' | 'workflow', so a wrong default would silently
-        # mis-classify every event.
+        # Round-4: kind defaults to 'llm'; container spans (workflow /
+        # agent / step) set it explicitly. The Rust ingest validates the
+        # field against the closed set {llm, workflow, agent, step} so
+        # a wrong default would silently mis-classify every event.
         assert self._minimal().kind == "llm"
 
     def test_round_3_cost_split_defaults_none(self):

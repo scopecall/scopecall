@@ -22,9 +22,16 @@ pub struct LlmCallRow {
     pub cost_usd: f64,
     // Cost components — populated by the processor's Pricer at enrichment
     // time. When the model is unknown to the pricing table, both components
-    // are 0 and `cost_usd` falls back to the SDK-supplied value. Column
-    // order MUST match the ClickHouse DDL in schemas/clickhouse/001_initial.sql
-    // because the clickhouse-rs client uses positional binding.
+    // are 0 and `cost_usd` falls back to the SDK-supplied value.
+    //
+    // Binding contract (clickhouse-rs 0.12+): the derive emits
+    // `INSERT INTO llm_calls (col1, col2, ...) FORMAT RowBinary` using
+    // the struct's field NAMES from R::COLUMN_NAMES, so binding is
+    // name-based, not positional. Struct field ORDER only
+    // controls the column-list ordering in the SQL — it does NOT have to
+    // match the ClickHouse DDL order (which itself drifts as ALTER ADD
+    // COLUMN ... AFTER ... migrations splice columns into the middle).
+    // What MUST match is the field NAME to the DDL column name, exactly.
     pub input_cost_usd: f64,
     pub output_cost_usd: f64,
     pub status: String,
@@ -34,6 +41,27 @@ pub struct LlmCallRow {
     pub feature_name: Option<String>,
     pub user_id: Option<String>,
     pub session_id: Option<String>,
+    /// v0.3: B2B customer / tenant attribution. NULL for pre-v0.3 SDKs.
+    /// Position matches migration 006 (added AFTER session_id).
+    pub customer_id: Option<String>,
+    /// v0.3: 1-based caller-attempt index. Default 1 for pre-v0.3 SDKs.
+    /// Position matches migration 007.
+    pub attempt_number: u16,
+    /// v0.3: retry_reason closed enum. NULL on first attempt.
+    pub retry_reason: Option<String>,
+    /// v0.3: marks non-production traffic for dashboard filtering.
+    pub is_test: bool,
+    /// v0.3: cost of the cached input portion. Derived server-side. 0 when
+    /// the model has no cache_read pricing rate.
+    pub cache_read_cost_usd: f64,
+    /// v0.3: trust signal for cost_usd. Closed enum:
+    /// "server_computed" | "sdk_fallback" | "unknown_model" | "container".
+    /// The "container" value is set by reprice() on workflow/agent/step
+    /// rows so the dashboard's cost-confidence indicator can distinguish
+    /// synthetic spans from real LLM calls.
+    pub cost_source: String,
+    /// v0.3: pricing-table version that produced cost_usd. YYYY-MM-DD.
+    pub pricing_version: Option<String>,
     pub environment: String,
     pub sdk_version: String,
     pub extra: Option<String>,
@@ -44,7 +72,10 @@ pub struct LlmCallRow {
     pub failure_mode: Option<String>,
     pub tool_calls: Option<String>,
     pub prompt_version: Option<String>,
-    /// "llm" | "workflow" — see schemas/clickhouse/004_span_kind.sql.
+    /// "llm" | "workflow" | "agent" | "step" — agent + step joined the
+    /// closed set in v0.3 for cost rollups across the workflow → agent
+    /// → step hierarchy. See schemas/clickhouse/004_span_kind.sql for
+    /// the original column + the v0.3 migrations that expanded the enum.
     pub kind: String,
 }
 
@@ -75,6 +106,13 @@ impl From<EnrichedEvent> for LlmCallRow {
             feature_name: e.event.feature_name,
             user_id: e.event.user_id,
             session_id: e.event.session_id,
+            customer_id: e.event.customer_id,
+            attempt_number: e.event.attempt_number,
+            retry_reason: e.event.retry_reason,
+            is_test: e.event.is_test,
+            cache_read_cost_usd: e.event.cache_read_cost_usd.unwrap_or(0.0),
+            cost_source: e.event.cost_source.unwrap_or_else(|| "unknown_model".to_owned()),
+            pricing_version: e.event.pricing_version,
             environment: e.event.environment,
             sdk_version: e.event.sdk_version,
             extra: e.event.extra,

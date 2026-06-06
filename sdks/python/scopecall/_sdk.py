@@ -82,7 +82,9 @@ class ScopeCallSDK:
         feature_name: str | None = None,
         user_id: str | None = None,
         session_id: str | None = None,
+        customer_id: str | None = None,
         prompt_version: str | None = None,
+        kind: str = "workflow",
     ) -> Generator[_context.TraceContext, None, None]:
         """Run a block as a named workflow trace.
 
@@ -111,6 +113,13 @@ class ScopeCallSDK:
         if resolved_prompt_version is None:
             resolved_prompt_version = self._config.default_prompt_version
 
+        # customer_id precedence: explicit kwarg > parent trace > None.
+        # B2B apps typically set it on the outermost trace (request entry)
+        # and let it propagate down — matches user_id / session_id behavior.
+        resolved_customer_id = customer_id
+        if resolved_customer_id is None and parent is not None:
+            resolved_customer_id = parent.customer_id
+
         ctx = _context.TraceContext(
             trace_id=parent.trace_id if parent else _context.new_trace_id(),
             span_id=_context.new_span_id(),
@@ -119,8 +128,10 @@ class ScopeCallSDK:
             prompt_version=resolved_prompt_version,
             user_id=user_id,
             session_id=session_id,
+            customer_id=resolved_customer_id,
             feature_name=feature_name or name,
             start_time_ms=time.time() * 1000.0,
+            kind=kind,
         )
         token = _context.push(ctx)
 
@@ -178,12 +189,135 @@ class ScopeCallSDK:
             feature_name=ctx.feature_name or self._config.default_feature,
             user_id=ctx.user_id or self._config.default_user_id,
             session_id=ctx.session_id or self._config.default_session_id,
+            customer_id=ctx.customer_id,
             environment=self._config.environment,
+            is_test=bool(self._config.test),
             sdk_version=__version__,
             prompt_version=ctx.prompt_version,
-            kind="workflow",
+            kind=ctx.kind,
         )
         self._exporter.enqueue(event)
+
+    # ── workflow() / agent() / step() — cost-attribution hierarchy ────
+    #
+    # Thin aliases over trace() that read more naturally in instrumented
+    # code. The three levels (workflow → agent → step) match how AI apps
+    # are actually built:
+    #
+    #     with sdk.workflow("support_refund"):
+    #         with sdk.agent("policy_check"):
+    #             with sdk.step("retrieve_policy"):
+    #                 docs = vector_db.query(...)
+    #             with sdk.step("draft_response"):
+    #                 response = openai_client.chat.completions.create(...)
+    #
+    # The dashboard groups cost / latency / error rates at each level so
+    # you can see "Refund workflow cost $5,900; 68% is in the policy
+    # agent's draft_response step." That's the cost-attribution story
+    # ScopeCall's v0.3 release builds the dashboard around.
+    #
+    # Why these are "aliases" and not enforced hierarchy: customers won't
+    # refactor their code to fit our taxonomy. Nesting is voluntary —
+    # `sdk.agent()` works as a top-level block if there's no surrounding
+    # workflow, and `sdk.step()` works on its own. The dashboard groups
+    # by name + kind regardless of nesting depth.
+    #
+    # Wire-format note: each method emits its own kind value
+    # (workflow / agent / step). The Rust ingest validates the closed
+    # set {"llm", "workflow", "agent", "step"} and the processor zeroes
+    # cost/tokens for all three container kinds — see
+    # services-rust/processor/src/enricher.rs reprice().
+
+    @contextmanager
+    def workflow(
+        self,
+        name: str,
+        *,
+        feature_name: str | None = None,
+        user_id: str | None = None,
+        session_id: str | None = None,
+        customer_id: str | None = None,
+        prompt_version: str | None = None,
+    ) -> Generator[_context.TraceContext, None, None]:
+        """Mark a block as a workflow — the top of the cost-attribution
+        hierarchy. Equivalent to sdk.trace() but reads more naturally
+        inside instrumented agent/RAG/multi-step code.
+
+        Usage:
+
+            with sdk.workflow("support_refund"):
+                ...
+        """
+        with self.trace(
+            name,
+            feature_name=feature_name,
+            user_id=user_id,
+            session_id=session_id,
+            customer_id=customer_id,
+            prompt_version=prompt_version,
+            kind="workflow",
+        ) as ctx:
+            yield ctx
+
+    @contextmanager
+    def agent(
+        self,
+        name: str,
+        *,
+        feature_name: str | None = None,
+        user_id: str | None = None,
+        session_id: str | None = None,
+        customer_id: str | None = None,
+        prompt_version: str | None = None,
+    ) -> Generator[_context.TraceContext, None, None]:
+        """Mark a block as an agent. Typically nested inside a workflow
+        but works standalone too.
+
+        Usage:
+
+            with sdk.agent("policy_check"):
+                ...
+        """
+        with self.trace(
+            name,
+            feature_name=feature_name,
+            user_id=user_id,
+            session_id=session_id,
+            customer_id=customer_id,
+            prompt_version=prompt_version,
+            kind="agent",
+        ) as ctx:
+            yield ctx
+
+    @contextmanager
+    def step(
+        self,
+        name: str,
+        *,
+        feature_name: str | None = None,
+        user_id: str | None = None,
+        session_id: str | None = None,
+        customer_id: str | None = None,
+        prompt_version: str | None = None,
+    ) -> Generator[_context.TraceContext, None, None]:
+        """Mark a block as a step within an agent. The most granular
+        level of the workflow/agent/step hierarchy.
+
+        Usage:
+
+            with sdk.step("retrieve_policy"):
+                ...
+        """
+        with self.trace(
+            name,
+            feature_name=feature_name,
+            user_id=user_id,
+            session_id=session_id,
+            customer_id=customer_id,
+            prompt_version=prompt_version,
+            kind="step",
+        ) as ctx:
+            yield ctx
 
     # ── span() — experimental / internal, do NOT use ──────────────────
     #
@@ -258,13 +392,6 @@ class ScopeCallSDK:
             yield ctx
         finally:
             _context.pop(token)
-
-    # Pythonic alias — the reviewer's example used `sdk.workflow(...)` in
-    # the manual-API mock. We expose `trace` as the canonical name (it
-    # matches the TS SDK and emits a workflow event) and `workflow` as
-    # a documented alias that does the same thing. Both names land on
-    # the same implementation.
-    workflow = trace
 
     # ── instrument() — auto-trace OpenAI / Anthropic client calls ──────
 
@@ -347,12 +474,15 @@ class ScopeCallSDK:
         feature_name: str | None = None,
         user_id: str | None = None,
         session_id: str | None = None,
+        customer_id: str | None = None,
         prompt_version: str | None = None,
         finish_reason: str | None = None,
         cache_read_tokens: int | None = None,
         error_message: str | None = None,
         extra: str | None = None,
         tool_calls: str | None = None,
+        attempt_number: int = 1,
+        retry_reason: str | None = None,
     ) -> None:
         """Manually record an LLM call as if a provider instrumentation had.
 
@@ -385,6 +515,10 @@ class ScopeCallSDK:
             session_id
             or (ctx.session_id if ctx else None)
             or self._config.default_session_id
+        )
+        resolved_customer = (
+            customer_id
+            or (ctx.customer_id if ctx else None)
         )
         resolved_prompt_version = (
             prompt_version
@@ -423,9 +557,13 @@ class ScopeCallSDK:
             feature_name=resolved_feature,
             user_id=resolved_user,
             session_id=resolved_session,
+            customer_id=resolved_customer,
             environment=self._config.environment,
+            is_test=bool(self._config.test),
             sdk_version=__version__,
             extra=extra,
+            attempt_number=attempt_number,
+            retry_reason=retry_reason,
             finish_reason=finish_reason,
             cache_read_tokens=cache_read_tokens,
             tool_calls=tool_calls,

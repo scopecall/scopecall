@@ -17,12 +17,15 @@
 --
 -- Column choice
 -- -------------
--- LowCardinality(String) — there are only two values ("llm" / "workflow")
--- so dictionary encoding is near-free. Default 'llm' means existing rows
--- (and any payload from pre-v0.1.2 SDKs that don't send the field) are
--- treated as LLM calls without backfill. Future kinds ("tool",
--- "retrieval") would add more values to the dictionary without a schema
--- change.
+-- LowCardinality(String) — the closed-enum value set is small ("llm" |
+-- "workflow" at v0.1.2 launch; expanded to add "agent" and "step" in
+-- v0.3 for the cost-attribution hierarchy) so dictionary encoding stays
+-- near-free. Default 'llm' means existing rows (and any payload from
+-- pre-v0.1.2 SDKs that don't send the field) are treated as LLM calls
+-- without backfill. Future kinds (e.g. "tool", "retrieval") would add
+-- more values to the dictionary without a schema change; the Rust
+-- ingest's closed-enum validator would need updating in lockstep so
+-- the LowCardinality dictionary stays bounded.
 --
 -- IDEMPOTENT: ALTER TABLE … ADD COLUMN IF NOT EXISTS is safe to re-run.
 
