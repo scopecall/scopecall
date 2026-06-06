@@ -14,7 +14,7 @@
 --
 -- Every cost / latency / error chart and the Overview page read from this
 -- view. Without the filter, those numbers were lies as soon as users
--- started using sdk.trace(). Round-4 external review caught it.
+-- started using sdk.trace().
 --
 -- ClickHouse can't ALTER MATERIALIZED VIEW's SELECT in place — DROP +
 -- CREATE is the only path. Both statements use IF EXISTS / IF NOT EXISTS

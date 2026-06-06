@@ -72,7 +72,7 @@ func (s *AlertsServer) CreateRule(w http.ResponseWriter, r *http.Request) {
 		// problems the SDK/UI author needs to fix. Anything else (Postgres
 		// errors, internal failures) gets a generic message so we don't
 		// leak schema/FK details. errors.Is replaces the brittle prefix
-		// match the third reviewer flagged. (T-4 from fourth-pass review.)
+		// match we previously used.
 		if errors.Is(err, alerts.ErrRuleNameRequired) ||
 			errors.Is(err, alerts.ErrInvalidRuleType) ||
 			errors.Is(err, alerts.ErrInvalidChannelType) ||

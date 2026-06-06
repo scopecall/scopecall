@@ -7,24 +7,24 @@ commit, or the wire contract drifts.
 
 Field-by-field history (so the next maintainer knows why each is here):
 
-  Identity (Round-1)        trace_id / span_id / parent_span_id
-  Timing  (Round-1)         timestamp (ms epoch), latency_ms, ttft_ms
-  Model   (Round-1)         model, provider
-  Usage   (Round-1)         input_tokens, output_tokens, cost_usd
-  Status  (Round-1)         status, error_message
-  Content (Round-2)         input_text, output_text (None vs "" matters —
+  Identity                  trace_id / span_id / parent_span_id
+  Timing                    timestamp (ms epoch), latency_ms, ttft_ms
+  Model                     model, provider
+  Usage                     input_tokens, output_tokens, cost_usd
+  Status                    status, error_message
+  Content                   input_text, output_text (None vs "" matters —
                             None = SDK didn't capture; "" = empty payload)
-  Context (Round-1)         feature_name, user_id, session_id
-  Meta    (Round-1)         environment, sdk_version
-  Extra   (Round-1)         extra (free-form JSON-stringified blob)
-  Streaming (Round-1 P1)    finish_reason, cache_read_tokens
-  Cost split (Round-3)      input_cost_usd, output_cost_usd (processor
+  Context                   feature_name, user_id, session_id
+  Meta                      environment, sdk_version
+  Extra                     extra (free-form JSON-stringified blob)
+  Streaming                 finish_reason, cache_read_tokens
+  Cost split                input_cost_usd, output_cost_usd (processor
                             recomputes server-side; SDK values advisory)
-  Routing (Round-3)         original_model (gateways that retarget),
+  Routing                   original_model (gateways that retarget),
                             budget_state, failure_mode
-  Tools (Round-3)           tool_calls (JSON-stringified)
-  Prompts (Round-4)         prompt_version
-  Kind (Round-4 + v0.3)     kind = 'llm' | 'workflow' | 'agent' | 'step'.
+  Tools                     tool_calls (JSON-stringified)
+  Prompts                   prompt_version
+  Kind (v0.3)               kind = 'llm' | 'workflow' | 'agent' | 'step'.
                             llm = provider call. The other three are
                             synthetic container rows emitted by
                             sdk.trace() / sdk.workflow() / sdk.agent()
@@ -70,7 +70,7 @@ class LLMEvent:
     input_tokens: int
     output_tokens: int
     cost_usd: float
-    # Cost split (Round-3 wire bump). Both Optional because gateways that
+    # Cost split. Both Optional because gateways that
     # don't return per-direction usage can't compute them; the processor
     # then fills both from the bundled pricing table.
     input_cost_usd: float | None = None
@@ -118,7 +118,7 @@ class LLMEvent:
     # version surfaces specific keys.
     extra: str | None = None
 
-    # ── Streaming + tool-call detail (Round-1 P1) ───────────────────────
+    # ── Streaming + tool-call detail ────────────────────────────────────
     finish_reason: str | None = None
     cache_read_tokens: int | None = None
 
@@ -165,7 +165,7 @@ class LLMEvent:
     cost_source: str | None = None
     pricing_version: str | None = None
 
-    # ── Routing intel (Round-3) ─────────────────────────────────────────
+    # ── Routing intel ───────────────────────────────────────────────────
     # When a gateway / fallback re-routes a request to a different model,
     # `model` holds the resolved one and `original_model` holds what the
     # caller asked for. `budget_state` and `failure_mode` are for future
@@ -177,13 +177,13 @@ class LLMEvent:
     failure_mode: str | None = None
     tool_calls: str | None = None
 
-    # ── Prompt version (Round-4) ────────────────────────────────────────
+    # ── Prompt version ──────────────────────────────────────────────────
     # Surfaces in the Prompts page. Per-trace via sdk.trace(prompt_version=...)
     # or globally via init(default_prompt_version=...). Trace value wins;
     # parent trace inherited unless explicitly overridden in a child.
     prompt_version: str | None = None
 
-    # ── Kind (Round-4 P0; v0.3 expanded) ────────────────────────────────
+    # ── Kind (v0.3 expanded) ────────────────────────────────────────────
     # 'llm' for provider calls. 'workflow' | 'agent' | 'step' are synthetic
     # container spans emitted by sdk.trace() / sdk.workflow() / sdk.agent()
     # / sdk.step() blocks. Container rows have zero tokens / zero cost and

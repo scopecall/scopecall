@@ -154,11 +154,10 @@ func Cache(rdb *redis.Client, ttl time.Duration, endpoint string) func(http.Hand
 				//
 				// AND when uncacheable, forget the singleflight entry so
 				// followers don't receive the leader's truncated buffer.
-				// This is the v2 fix: the third-pass change stopped poisoning
-				// Redis, but followers still got the bad bytes. Now we
-				// Forget() the key, signal cacheable=false, and let each
-				// follower re-execute the handler against its OWN context.
-				// (S-2 from fourth-pass review.)
+				// The previous fix stopped poisoning Redis, but followers
+				// still got the bad bytes. Now we Forget() the key, signal
+				// cacheable=false, and let each follower re-execute the
+				// handler against its OWN context.
 				body := rec.body.Bytes()
 				cacheable := rec.statusCode == http.StatusOK &&
 					r.Context().Err() == nil &&

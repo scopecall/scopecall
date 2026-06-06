@@ -6,7 +6,7 @@ Why `contextvars` (PEP 567) and not threadlocals: thread-locals don't
 propagate across `await` boundaries by default. `contextvars.ContextVar`
 DOES propagate across `await` and into `asyncio.create_task()`, which is
 the table-stakes property for any AI backend using `AsyncOpenAI` /
-`AsyncAnthropic`. The reviewer correctly called this out as a P0.
+`AsyncAnthropic`.
 
 Each `sdk.trace(name)` call:
 
@@ -54,9 +54,9 @@ class TraceContext:
     parent_span_id: str | None
 
     # The block's human label. Doubles as the default feature_name on the
-    # synthetic workflow event we emit on block exit. The reviewer's
-    # FastAPI example was `sdk.trace("chat-api", ...)` — that string ends
-    # up as feature_name='chat-api' on the workflow row.
+    # synthetic workflow event we emit on block exit. Example:
+    # `sdk.trace("chat-api", ...)` — "chat-api" ends up as
+    # feature_name='chat-api' on the workflow row.
     name: str | None
 
     # Per-trace prompt_version. None at this level means "inherit from

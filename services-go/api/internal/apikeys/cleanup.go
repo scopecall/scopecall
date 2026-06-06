@@ -11,10 +11,9 @@ import (
 )
 
 // Default retention. Overridable via API_KEY_RETENTION_DAYS env var read in
-// cmd/api/main.go. The default leans on the safer side of the trade-off
-// the round-8 reviewer flagged: short enough to keep the audit list
-// bounded, long enough that a leak surfacing two-to-three weeks after
-// rotation still finds the row.
+// cmd/api/main.go. The default leans on the safer side of the trade-off:
+// short enough to keep the audit list bounded, long enough that a leak
+// surfacing two-to-three weeks after rotation still finds the row.
 const DefaultRetentionDays = 30
 
 // Period at which the cleanup loop runs. Hourly is plenty — the cleanup

@@ -1,4 +1,4 @@
-"""Config + validate() — the Round-8 endpoint-required contract.
+"""Config + validate() — the endpoint-required contract.
 
 Every code path here is mirrored in
 sdks/typescript/test/init.test.ts; if you change behavior in one,
@@ -42,8 +42,8 @@ class TestConfigValidate:
             validate(ScopeCallConfig())
 
     def test_api_key_without_endpoint_raises(self):
-        # Round-8 review: a silent default to hosted Cloud (which doesn't
-        # exist yet) would lose every event. Fail loud instead.
+        # A silent default to hosted Cloud (which doesn't exist yet) would
+        # lose every event. Fail loud instead.
         with pytest.raises(scopecall.ConfigError, match="endpoint"):
             validate(ScopeCallConfig(api_key="sc_test_xxx"))
 
@@ -69,7 +69,7 @@ class TestInitFunction:
             scopecall.init(cfg, debug=False)
 
     def test_init_propagates_config_error(self):
-        # Round-8 endpoint-required contract should bubble up through init().
+        # The endpoint-required contract should bubble up through init().
         with pytest.raises(scopecall.ConfigError, match="endpoint"):
             scopecall.init(api_key="sc_test_xxx")
 

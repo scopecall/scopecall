@@ -6,7 +6,7 @@ export interface TraceContext {
    * Top-level trace() generates a fresh traceId; nested trace() calls
    * INHERIT the parent's traceId so the whole workflow groups together
    * on the dashboard. Without this, "show me the workflow that produced
-   * this trace" never assembles correctly. (Round-2 external review P0.)
+   * this trace" never assembles correctly.
    */
   traceId: string;
   /** This span's id. Unique per trace() invocation. */

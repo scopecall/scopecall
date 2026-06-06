@@ -16,7 +16,7 @@ export interface LLMEvent {
   // Timing — MUST be Unix epoch milliseconds as a number (f64). The Rust
   // ingest deserializes this as `timestamp: f64` (services-rust/common/src/event.rs).
   // Sending an ISO 8601 string produces a 400 from the ingest service — the
-  // SDK swallows that and the user sees no traces. (External review P0.)
+  // SDK swallows that and the user sees no traces.
   timestamp: number;
   latency_ms: number;
   ttft_ms: number | null; // time to first token (streaming only)
@@ -39,7 +39,7 @@ export interface LLMEvent {
   // NOT be `null` on the wire — the Rust ingest declares these as `String`
   // (not `Option<String>`) and explicit null deserializes to a 400. The
   // ingest also has a defensive null_to_empty mapper for older SDKs in
-  // the wild, but new SDK builds canonically emit "". (Round-2 review.)
+  // the wild, but new SDK builds canonically emit "".
   input_text: string;
   output_text: string;
 
@@ -140,8 +140,8 @@ export interface LLMEvent {
    *           kinds form the workflow → agent → step hierarchy the v0.3
    *           cost-attribution dashboards roll up against. The Rust
    *           ingest validates the closed set { llm | workflow | agent |
-   *           step } and rejects anything else. (Round-3 external review
-   *           P0 for workflow; v0.3 for agent + step.)
+   *           step } and rejects anything else. (workflow shipped in
+   *           v0.1; agent + step in v0.3.)
    *
    * Optional on the wire for backwards compatibility — pre-v0.1.2 SDKs
    * don't send it. Ingest defaults to "llm" when absent.

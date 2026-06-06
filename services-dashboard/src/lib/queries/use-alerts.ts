@@ -49,7 +49,7 @@ async function authHeaders(): Promise<Record<string, string>> {
 
 export function useAlertRules(enabled = true) {
   // orgId in the key prevents cross-org cache leak once an org switcher
-  // exists. (D1 from sixth-pass review — same fix as saved-views.)
+  // exists. (Same fix as saved-views.)
   const orgId = useOrgId();
   return useQuery({
     queryKey: ["alert-rules", orgId],

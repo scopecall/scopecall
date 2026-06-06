@@ -74,9 +74,9 @@ describe("init()", () => {
   });
 
   it("apiKey WITHOUT endpoint throws ConfigError", () => {
-    // Round-8 review: a missing endpoint used to silently default to a
-    // hosted-Cloud URL that doesn't exist yet, so a fresh user would lose
-    // events with no signal. We now require endpoint up front.
+    // A missing endpoint used to silently default to a hosted-Cloud URL
+    // that doesn't exist yet, so a fresh user would lose events with no
+    // signal. We now require endpoint up front.
     expect(() => init({ apiKey: "sc_test_key" })).toThrow(/endpoint/i);
   });
 });

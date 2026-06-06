@@ -80,8 +80,8 @@ export function FlowNode({ data, selected }: NodeProps) {
   // Workflow containers render as rounded SQUARES, LLM calls as circles.
   // This is the single visual cue that tells the user "this is your code
   // (sdk.trace block)" vs "this is a provider call" — without it the
-  // Flow Map is just a hairball. Round-4 review fix: trace-level spans
-  // are now real rows in CH, so the map can finally show containers.
+  // Flow Map is just a hairball. Trace-level spans are now real rows in
+  // CH, so the map can finally show containers.
   const shape = d.kind === "workflow" ? "rounded-lg" : "rounded-full";
 
   return (

@@ -87,7 +87,7 @@ func Breakdown(ctx context.Context, ch driver.Conn, orgID string, tw TimeWindow,
 		// Cross-dim cardinality bound: when key2 is user_id, an org with
 		// millions of distinct end-users would make ClickHouse hold all
 		// intermediate hash-table state in memory before LIMIT. Spill to disk
-		// when the hash table exceeds 1 GiB. (T-6 from fourth-pass review.)
+		// when the hash table exceeds 1 GiB.
 		q = fmt.Sprintf(`
 SELECT
     %s                                                  AS key,

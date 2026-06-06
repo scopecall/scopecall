@@ -278,9 +278,9 @@ func (s *APIKeysServer) CreateKey(w http.ResponseWriter, r *http.Request) {
 // hot-path auth lookup excludes it (the partial index idx_api_keys_active
 // has `WHERE revoked = FALSE`).
 //
-// Round-7 review fix: Postgres update alone leaves the positive Redis cache
-// entry intact for up to 60s, which means a revoked key keeps working after
-// the user pressed "revoke." We now eagerly DEL `key:<hash>` from Redis the
+// Postgres update alone would leave the positive Redis cache entry intact
+// for up to 60s, which means a revoked key keeps working after the user
+// pressed "revoke." We now eagerly DEL `key:<hash>` from Redis the
 // moment the row flips. We also set `revoked:<hash>` for 5 minutes — this
 // is the same negative-cache convention the Rust ingest already reads via
 // `services-rust/ingest/src/auth.rs`, so the SDK path stops accepting the

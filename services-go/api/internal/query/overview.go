@@ -33,7 +33,7 @@ SELECT
     ifNotFinite(countIf(status = 'error') / count() * 100, 0)    AS error_rate_pct,
     uniqExact(trace_id)                                          AS unique_traces
 FROM llm_calls
--- kind = 'llm' is mandatory on every LLM-metric query (Round-4 review).
+-- kind = 'llm' is mandatory on every LLM-metric query.
 -- The llm_calls table also stores 'workflow' rows from sdk.trace() blocks;
 -- counting them here would inflate total_calls by N+1 per workflow,
 -- distort latency averages with whole-block durations, and add bogus

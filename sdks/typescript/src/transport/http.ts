@@ -9,7 +9,7 @@ export class HttpTransport implements Transport {
     // endpoint is now required by config.validate() — by the time we get
     // here it's guaranteed non-empty. The bang reflects the post-validate
     // contract; no silent fallback to a "default" hosted URL that doesn't
-    // exist yet (Round-8 review).
+    // exist yet.
     this.endpoint = config.endpoint!;
     this.apiKey = config.apiKey!;
   }

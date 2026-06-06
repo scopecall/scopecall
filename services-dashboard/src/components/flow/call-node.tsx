@@ -52,8 +52,8 @@ function statusColor(status: string, isFocus: boolean) {
       };
     default:
       // Successful calls — inherit the surface chrome. No tint by default;
-      // colored tint = "look here." Round-6 user feedback: green everywhere
-      // was unreadable on light theme.
+      // colored tint = "look here." Green everywhere was unreadable on
+      // light theme.
       return {
         ring: "border-border",
         fill: "bg-card",

@@ -1,6 +1,6 @@
 """Workflow-span emission tests.
 
-Verifies the Round-3 P0 contract from the TS SDK: every `sdk.trace()`
+Verifies the workflow-span contract from the TS SDK: every `sdk.trace()`
 block emits a synthetic `kind='workflow'` LLMEvent when the block exits.
 Without this, child LLM rows would have a `parent_span_id` pointing at
 nothing and the dashboard's flow-map JOIN finds no parent.
@@ -54,7 +54,7 @@ class TestWorkflowEmission:
         assert ev["kind"] == "workflow"
         assert ev["feature_name"] == "test-workflow"
         # Workflow spans MUST have empty model/provider so they're
-        # filtered out of LLM analytics rollups. (Round-4 P0.)
+        # filtered out of LLM analytics rollups.
         assert ev["model"] == ""
         assert ev["provider"] == ""
         # And zero tokens / zero cost — they're synthetic markers, not

@@ -7,9 +7,8 @@ Architecturally identical to the TS SDK's
   - A background thread that wakes up every `flush_interval` seconds (or
     immediately on `.flush()`), drains up to `batch_size` events, and
     posts them as one HTTP request.
-  - Auto-flush is enabled by default (Round-5 review P0 — without it,
-    long-running servers queued events forever and no traces ever
-    appeared in the dashboard).
+  - Auto-flush is enabled by default — without it, long-running servers
+    queued events forever and no traces ever appeared in the dashboard.
   - `.close()` clears the wake-up signal, drains remaining events, and
     joins the thread within `timeout` seconds.
 
@@ -63,10 +62,10 @@ class Exporter:
         self._flush_now = threading.Event()
         self._file_lock = threading.Lock()
 
-        # Concurrent flush guard — Round-5 TS review caught a race where
-        # an auto-tick and a manual `flush()` could each drain half a
-        # batch and post both halves in parallel. The lock makes flush
-        # serial; the auto-tick yields if a manual flush is in progress.
+        # Concurrent flush guard — without this lock, an auto-tick and a
+        # manual `flush()` could each drain half a batch and post both
+        # halves in parallel. The lock makes flush serial; the auto-tick
+        # yields if a manual flush is in progress.
         self._flush_lock = threading.Lock()
 
         # HTTP client lives for the SDK's lifetime so we get TCP keepalive
@@ -220,7 +219,7 @@ class Exporter:
               "sent_at": "<RFC3339 timestamp>" }
 
         The Rust side rejects payloads without `sent_at` to catch clock
-        skew / stale-deliveries (Round-1 review P0).
+        skew / stale-deliveries.
         """
         mode = self._config.mode
 

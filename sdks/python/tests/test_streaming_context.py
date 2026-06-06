@@ -1,7 +1,7 @@
 """Streaming + trace-context propagation tests.
 
-Round-12 review P0b: streaming wrappers used to call
-`_context.get_current()` at EMIT time (when the stream completes),
+Streaming wrappers used to call `_context.get_current()` at EMIT time
+(when the stream completes),
 not at CREATE time (when `client.chat.completions.create()` is
 called). That meant any stream consumed AFTER the enclosing
 `sdk.trace()` block exited became orphan — `parent_span_id=None`,
@@ -104,9 +104,8 @@ class TestOpenAIStreamingContextSync:
                     messages=[{"role": "user", "content": "hi"}],
                     stream=True,
                 )
-            # ...but consume it AFTER the block has exited. This is the
-            # critical Round-12 case — without ctx_snapshot, the LLM
-            # event becomes orphan here.
+            # ...but consume it AFTER the block has exited. Without
+            # ctx_snapshot, the LLM event becomes orphan here.
             collected = []
             for chunk in stream:
                 if chunk.choices[0].delta.content:
@@ -120,7 +119,7 @@ class TestOpenAIStreamingContextSync:
         assert len(events) == 2
         llm = next(e for e in events if e["kind"] == "llm")
         wf = next(e for e in events if e["kind"] == "workflow")
-        # The headline assertions from the reviewer's P0b spec:
+        # Headline assertions for streaming-context propagation:
         assert llm["trace_id"] == wf["trace_id"]
         assert llm["trace_id"] == captured_trace_id
         assert llm["parent_span_id"] == wf["span_id"]

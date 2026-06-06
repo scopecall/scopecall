@@ -32,7 +32,7 @@ export function useSavedViews(enabled = true) {
   // Include orgId in the cache key so an org switcher (when it lands)
   // doesn't serve the previous org's views to the next org's user. Today
   // there's no switcher, but the cache is process-lived — better to fix
-  // before the switcher exposes the leak. (D1 from sixth-pass review.)
+  // before the switcher exposes the leak.
   const orgId = useOrgId();
   return useQuery({
     queryKey: ["saved-views", orgId],

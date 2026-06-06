@@ -170,7 +170,7 @@ type RevokeAPIKeyParams struct {
 // goroutine uses revoked_at (not created_at) to decide what's old enough to
 // permanently delete, so a key minted a year ago and revoked today gets the
 // full retention window starting now. Returns key_hash so the handler can
-// DEL key:<hash> from Redis for immediate revocation (Round-7 review).
+// DEL key:<hash> from Redis for immediate revocation.
 // Scoped by org_id so cross-org guessing can't revoke another tenant's keys.
 func (q *Queries) RevokeAPIKey(ctx context.Context, arg RevokeAPIKeyParams) (string, error) {
 	row := q.db.QueryRowContext(ctx, revokeAPIKey, arg.ID, arg.OrgID)

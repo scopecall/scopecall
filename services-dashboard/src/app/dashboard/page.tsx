@@ -78,7 +78,6 @@ export default function OverviewPage() {
   // in the dashboard's current window, which would deadlock the user on the
   // install screen when their SDK is working but their latest call is
   // outside the active range (3-day-old data + "last 24h" range = stuck).
-  // Sixth-pass review S2.
   const sdkHealth = useSDKHealth(orgId ?? "", enabled);
   const isFirstRun =
     enabled && !sdkHealth.isLoading && sdkHealth.data?.has_calls === false;

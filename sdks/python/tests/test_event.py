@@ -1,9 +1,8 @@
 """LLMEvent wire-format parity tests.
 
 Two contracts being verified:
-  1. Every Round-1-through-Round-7 wire field exists with the right
-     default. Adding a field here without mirroring it in the TS SDK
-     and Rust ingest is a wire break.
+  1. Every wire field exists with the right default. Adding a field here
+     without mirroring it in the TS SDK and Rust ingest is a wire break.
   2. to_wire() round-trips deterministically to JSON.
 """
 
@@ -15,7 +14,7 @@ from scopecall.wire._event import LLMEvent
 
 
 class TestLLMEventFields:
-    """Field-by-field parity with the Round-1-through-Round-7 wire shape."""
+    """Field-by-field parity with the wire shape."""
 
     def _minimal(self) -> LLMEvent:
         # Minimal valid event — all required positional fields set.
@@ -34,8 +33,8 @@ class TestLLMEventFields:
         )
 
     def test_defaults_for_round_2_content_fields(self):
-        # Round-2 made input_text / output_text Optional[str] with None as
-        # the default. "" and None are distinct on the wire.
+        # input_text / output_text are Optional[str] with None as the
+        # default. "" and None are distinct on the wire.
         ev = self._minimal()
         assert ev.input_text is None
         assert ev.output_text is None
@@ -44,10 +43,10 @@ class TestLLMEventFields:
         assert self._minimal().status == "success"
 
     def test_default_kind_is_llm(self):
-        # Round-4: kind defaults to 'llm'; container spans (workflow /
-        # agent / step) set it explicitly. The Rust ingest validates the
-        # field against the closed set {llm, workflow, agent, step} so
-        # a wrong default would silently mis-classify every event.
+        # kind defaults to 'llm'; container spans (workflow / agent / step)
+        # set it explicitly. The Rust ingest validates the field against
+        # the closed set {llm, workflow, agent, step} so a wrong default
+        # would silently mis-classify every event.
         assert self._minimal().kind == "llm"
 
     def test_round_3_cost_split_defaults_none(self):
@@ -103,8 +102,8 @@ class TestToWire:
         assert back["input_text"] == "hello"
 
     def test_to_wire_preserves_none_for_unset_text(self):
-        # None vs "" matters — the Rust ingest stores them distinctly.
-        # Round-2 P0b explicitly fixed the SDK side of this contract.
+        # None vs "" matters — the Rust ingest stores them distinctly,
+        # and the SDK preserves that distinction.
         ev = LLMEvent(
             trace_id="t1",
             span_id="s1",

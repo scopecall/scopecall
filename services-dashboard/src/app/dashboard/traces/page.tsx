@@ -69,9 +69,7 @@ function defaultRange(): DateRange {
 // /dashboard/cost, charts, regressions-panel, and insights-strip: those
 // callers attach ISO timestamps as ?from=...&to=... and expect the Traces
 // page to land inside that window — without this, the user clicks a 30-day
-// spike and the Traces page silently shows them the last 24h instead. This
-// was caught by external review on the 7th pass; six internal reviews missed
-// it.
+// spike and the Traces page silently shows them the last 24h instead.
 function rangeFromSearchParams(sp: URLSearchParams): DateRange {
   const fromStr = sp.get("from");
   const toStr = sp.get("to");
@@ -263,7 +261,7 @@ function TracesView() {
   //  (a) the trace-tree query bounds its ClickHouse scan instead of probing,
   //  (b) refreshing / sharing the URL lands the recipient in the same range,
   //  (c) router.back() from detail → list returns to the same filter+range.
-  // Round-3 review flagged the missing from/to as a performance + trust gap.
+  // The missing from/to was a performance + trust gap.
   const detailHref = useCallback((traceId: string, spanId: string): string => {
     const sp = new URLSearchParams();
     sp.set("span", spanId);

@@ -4,10 +4,10 @@ Matches the TS SDK's `ScopeCallConfig` shape (sdks/typescript/src/config.ts)
 field-for-field where it makes sense. Naming follows Python conventions
 (`snake_case`, `bool` defaults) — the field set itself is parity.
 
-Round-8 review made `endpoint` required when `api_key` is set: a missing
-endpoint used to silently default to https://ingest.scopecall.com/v1/ingest
-which doesn't exist yet (hosted Cloud isn't live). Python now follows the
-same contract — fail loud with a `ConfigError` that names the fix.
+`endpoint` is required when `api_key` is set: a missing endpoint used to
+silently default to https://ingest.scopecall.com/v1/ingest which doesn't
+exist yet (hosted Cloud isn't live). Python follows the same contract as
+TS — fail loud with a `ConfigError` that names the fix.
 """
 
 from __future__ import annotations
@@ -31,8 +31,8 @@ class ScopeCallConfig:
     # Exactly one of api_key / output / debug must be set. Mirrors TS.
     api_key: str | None = None
 
-    # `endpoint` is REQUIRED when api_key is set (Round-8 review). For
-    # self-hosted, point at the Rust ingest URL, e.g.
+    # `endpoint` is REQUIRED when api_key is set. For self-hosted, point
+    # at the Rust ingest URL, e.g.
     # http://localhost:8080/v1/ingest. For hosted Cloud — not yet live —
     # this default will be reintroduced.
     endpoint: str | None = None
@@ -80,10 +80,10 @@ class ScopeCallConfig:
     # is an explicit override of the env var.
     test: bool | None = None
 
-    # Round-4 review (TS): default_prompt_version tags every call with a
-    # build/commit/release identifier when the app has a single canonical
-    # prompt set. Per-trace prompt_version wins, then parent trace's
-    # value, then this default, then None.
+    # default_prompt_version tags every call with a build/commit/release
+    # identifier when the app has a single canonical prompt set. Per-trace
+    # prompt_version wins, then parent trace's value, then this default,
+    # then None.
     default_prompt_version: str | None = None
 
     def __post_init__(self) -> None:
@@ -121,7 +121,7 @@ def validate(config: ScopeCallConfig) -> None:
     Three valid configurations:
       1. debug=True            → console mode (no api_key needed)
       2. output=<path>         → file mode (no api_key needed)
-      3. api_key + endpoint    → HTTP mode (BOTH required since Round-8)
+      3. api_key + endpoint    → HTTP mode (BOTH required)
 
     `disabled=True` shorts the entire SDK to no-ops; we don't bother
     validating in that case because the SDK never sends anything anyway.
@@ -136,8 +136,8 @@ def validate(config: ScopeCallConfig) -> None:
         raise ConfigError(
             "scopecall.init() requires one of: api_key=..., debug=True, or output=<path>."
         )
-    # Round-8: endpoint is now required alongside api_key. No silent
-    # fallback to a hosted-Cloud URL that doesn't exist yet.
+    # endpoint is required alongside api_key. No silent fallback to a
+    # hosted-Cloud URL that doesn't exist yet.
     if not config.endpoint:
         raise ConfigError(
             "scopecall.init(api_key=...) requires endpoint=... "

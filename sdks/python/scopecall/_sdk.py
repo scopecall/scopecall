@@ -9,8 +9,8 @@ Public API on the instance:
   sdk.flush(timeout=5.0)       # block until queue drains
   sdk.close(timeout=5.0)       # shutdown + final flush
 
-The reviewer asked for the `sdk = init(...)` shape rather than the
-module-level globals the v0.1 Python SDK used. This matches because:
+The `sdk = init(...)` shape — rather than module-level globals like the
+v0.1 Python SDK used — is the supported style because:
 
   - Multiple SDKs in one process (rare, but legitimate — e.g. a meta-tool
     that observes another ScopeCall instance) need separate state.
@@ -324,11 +324,10 @@ class ScopeCallSDK:
     # ⚠️  EXPERIMENTAL. Excluded from the public API surface.
     #
     # `span()` chains the parent_span_id contextvar without emitting a
-    # row. The Round-12 reviewer correctly flagged that this creates
-    # virtual parents: any child LLM call that references the span's
-    # span_id as parent_span_id has no persisted row to JOIN to in
-    # ClickHouse, breaking the dashboard's trace tree + flow map
-    # hierarchy.
+    # row. This creates virtual parents: any child LLM call that
+    # references the span's span_id as parent_span_id has no persisted
+    # row to JOIN to in ClickHouse, breaking the dashboard's trace tree
+    # + flow map hierarchy.
     #
     # Public guidance (in README + __init__.py) is to nest
     # `sdk.trace(name)` blocks instead — each nested trace emits a
@@ -486,10 +485,9 @@ class ScopeCallSDK:
     ) -> None:
         """Manually record an LLM call as if a provider instrumentation had.
 
-        The escape hatch the reviewer correctly called out as a P0 for
-        the Python ecosystem. LangChain / LlamaIndex / CrewAI / RAG
-        pipelines / internal LLM wrappers all need to be observable
-        before we ship per-framework integrations.
+        The escape hatch for the Python ecosystem. LangChain / LlamaIndex
+        / CrewAI / RAG pipelines / internal LLM wrappers all need to be
+        observable before we ship per-framework integrations.
 
         The caller is responsible for measuring latency_ms and supplying
         token counts. parent_span_id is auto-resolved from the current
@@ -527,17 +525,17 @@ class ScopeCallSDK:
         )
 
         # Apply the redactor + capture_content policy via the same
-        # helper the provider instrumentations use. Round-12 review P0a:
-        # this used to construct LLMEvent directly with the raw
-        # input_text / output_text the caller supplied, bypassing the
-        # redactor — which falsified the "redact_pii=True scrubs
-        # input/output before leaving the process" claim for manual
-        # instrumentation (LangChain / LlamaIndex / custom).
+        # helper the provider instrumentations use. This used to
+        # construct LLMEvent directly with the raw input_text /
+        # output_text the caller supplied, bypassing the redactor —
+        # which falsified the "redact_pii=True scrubs input/output
+        # before leaving the process" claim for manual instrumentation
+        # (LangChain / LlamaIndex / custom).
         input_text, output_text = apply_redaction(self, input_text, output_text)
 
-        # We do NOT convert None → "" here — the Round-2 review fixed
-        # the wire contract so None means "SDK didn't capture" and ""
-        # means "empty payload"; the distinction matters in CH.
+        # We do NOT convert None → "" here — the wire contract is that
+        # None means "SDK didn't capture" and "" means "empty payload";
+        # the distinction matters in CH.
         event = LLMEvent(
             trace_id=trace_id,
             span_id=_context.new_span_id(),
@@ -597,10 +595,9 @@ class ScopeCallSDK:
                 r"[0-9a-f]{4}-[0-9a-f]{12}\\b",
             )
 
-        Round-12 review polish: the README used to suggest
-        `sdk._redactor.add_pattern(...)` which is a private API.
-        Promoting this to a public method gives operators a stable
-        surface to extend redaction on.
+        The README used to suggest `sdk._redactor.add_pattern(...)`
+        which is a private API. Promoting this to a public method gives
+        operators a stable surface to extend redaction on.
         """
         if self._redactor is None:
             return
@@ -626,7 +623,7 @@ def init(config: ScopeCallConfig | None = None, **kwargs: object) -> ScopeCallSD
     Two equivalent invocation styles — pick whichever your codebase
     prefers:
 
-        # Style 1: kwargs (the reviewer's example, idiomatic Python)
+        # Style 1: kwargs (idiomatic Python)
         sdk = scopecall.init(
             api_key="sc_live_xxx",
             endpoint="http://localhost:8080/v1/ingest",

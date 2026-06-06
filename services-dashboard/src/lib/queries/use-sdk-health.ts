@@ -55,9 +55,9 @@ export function useSDKHealth(orgId: string, enabled = true) {
     //   from "is this working?" to "what's the throughput?" — 30 s is plenty
     //   for that. Faster polling here would just burn API quota.
     //
-    // Round-7 review feedback. Implemented as a function so React Query
-    // re-evaluates after every query result, flipping the cadence
-    // automatically on the first non-zero call count.
+    // Implemented as a function so React Query re-evaluates after every
+    // query result, flipping the cadence automatically on the first
+    // non-zero call count.
     refetchInterval: (query) => {
       const data = query.state.data;
       return data?.has_calls ? 30_000 : 3_000;

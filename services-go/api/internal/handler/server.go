@@ -188,7 +188,7 @@ func (s *Server) ListAlerts(_ context.Context, _ gen.ListAlertsRequestObject) (g
 //	                                   route around it. This matters: without
 //	                                   the 503, a pod with both DBs down stays
 //	                                   in the LB pool and 500s every request.
-//	                                   (S-2 from third-pass review.)
+//
 //
 // ClickHouse + Postgres count as "critical" — either down → 503. Redis is a
 // cache; degraded Redis means slower queries but not broken, so it doesn't

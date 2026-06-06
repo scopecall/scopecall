@@ -9,7 +9,7 @@
 -- that spanId was never written to ClickHouse. The trace-tree query
 --   FROM llm_calls c JOIN llm_calls p ON c.parent_span_id = p.span_id
 -- found no parent row, so the workflow node was invisible. Flow Map and
--- trace tree rendered flat. (Round-3 external review P0.)
+-- trace tree rendered flat.
 --
 -- With this column, the SDK emits one additional row per sdk.trace() block
 -- with kind='workflow', model='', tokens=0, cost=0, and the trace's

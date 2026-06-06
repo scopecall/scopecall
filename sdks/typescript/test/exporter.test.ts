@@ -10,12 +10,12 @@ import type { Transport } from "../src/transport/types.js";
 import type { ExportRequest, ExportResponse } from "../src/transport/types.js";
 import type { LLMEvent } from "../src/wire/llm-event.js";
 
-// Fixture honors the CURRENT wire contract (not the round-1 pre-fix shape).
-// `satisfies LLMEvent` makes the compiler enforce all required fields and
-// reject `null` for non-nullable ones (trace_id, input_text, output_text,
-// kind). Round-3 review flagged the previous version of this fixture as
-// stale — it still set trace_id: null and timestamp: ISO string, which
-// the production SDK would never emit and which Rust ingest would 400.
+// Fixture honors the CURRENT wire contract (not the original pre-fix
+// shape). `satisfies LLMEvent` makes the compiler enforce all required
+// fields and reject `null` for non-nullable ones (trace_id, input_text,
+// output_text, kind). The previous version of this fixture was stale —
+// it still set trace_id: null and timestamp: ISO string, which the
+// production SDK would never emit and which Rust ingest would 400.
 function makeEvent(override?: Partial<LLMEvent>): LLMEvent {
   const spanId = crypto.randomUUID();
   return {
@@ -237,10 +237,10 @@ describe("V5.20 — SIGTERM flush completes", () => {
   });
 });
 
-// ─── Round-5 auto-flush — without this, README's "traces in seconds"
-//     was false for any long-running server. The next two tests are the
+// ─── Auto-flush — without this, README's "traces in seconds" was false
+//     for any long-running server. The next two tests are the
 //     load-bearing protection against regressions.
-describe("Round 5 — periodic auto-flush", () => {
+describe("periodic auto-flush", () => {
   afterEach(() => {
     vi.useRealTimers();
   });

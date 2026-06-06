@@ -52,7 +52,7 @@ func (s *Server) GetGraphExpandHTTP(w http.ResponseWriter, r *http.Request) {
 	// matches workflow rows when model is "" and LLM rows otherwise.
 	// Only `op` is structurally required (rejecting empty op would
 	// match every node in the graph). Caught when seeded data made
-	// workflow nodes visible — clicking them returned 400. (Round-5.)
+	// workflow nodes visible — clicking them returned 400.
 	model := q.Get("model")
 	if op == "" {
 		problem.Write(w, http.StatusBadRequest, "Bad Request", "'op' is required")

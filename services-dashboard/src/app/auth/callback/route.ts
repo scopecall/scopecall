@@ -8,7 +8,7 @@ import { NextResponse } from "next/server";
 // route). Naively concatenating `${origin}${next}` is a classic open-redirect
 // when `next` is `//evil.com` or `/x//evil.com` — the browser parses it as
 // protocol-relative and navigates off-site. Whitelist to internal dashboard
-// paths only. (T-6 from third-pass review.)
+// paths only.
 function safeNextPath(raw: string | null): string {
   if (!raw) return "/dashboard";
   // Must start with `/`, must not be `//` or `/\` (protocol-relative), must

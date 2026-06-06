@@ -28,7 +28,7 @@ RETURNING id, org_id, name, key_prefix, scopes, revoked, created_at, last_used_a
 -- goroutine uses revoked_at (not created_at) to decide what's old enough to
 -- permanently delete, so a key minted a year ago and revoked today gets the
 -- full retention window starting now. Returns key_hash so the handler can
--- DEL key:<hash> from Redis for immediate revocation (Round-7 review).
+-- DEL key:<hash> from Redis for immediate revocation.
 -- Scoped by org_id so cross-org guessing can't revoke another tenant's keys.
 UPDATE api_keys
 SET revoked    = TRUE,

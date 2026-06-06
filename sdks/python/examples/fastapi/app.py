@@ -133,8 +133,8 @@ async def chat(req: ChatRequest):
     ScopeCall, with parent-span chaining. The LLM event has TTFT
     populated when streaming.
 
-    Critical detail (Round-12 review P0b): for the streaming path, the
-    `sdk.trace()` block must wrap the stream-consumption loop, NOT
+    Critical detail: for the streaming path, the `sdk.trace()` block
+    must wrap the stream-consumption loop, NOT
     just the call to `create()`. If the trace block exits before the
     StreamingResponse iterator runs, the workflow span's `latency_ms`
     only measures stream creation (a few ms), and — if the SDK is

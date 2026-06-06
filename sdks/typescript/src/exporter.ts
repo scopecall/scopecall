@@ -85,8 +85,8 @@ export class ScopeCallExporter {
    * Periodic auto-flush timer. Without this, a long-running server would
    * queue events forever and never surface them until process exit — the
    * README's "traces appear within seconds" claim was false in production.
-   * Round-5 external review P0. The interval is .unref()'d so it doesn't
-   * keep the process alive on its own.
+   * The interval is .unref()'d so it doesn't keep the process alive on
+   * its own.
    */
   private flushTimer: ReturnType<typeof setInterval> | null = null;
   /**
@@ -164,9 +164,9 @@ export class ScopeCallExporter {
     attempt = 0
   ): Promise<void> {
     // Wire format: snake_case to match the Rust ingest's serde DTO.
-    // Until this commit the SDK sent `sentAt` (camelCase) — the ingest
+    // Early versions of the SDK sent `sentAt` (camelCase) — the ingest
     // rejected the batch with a 400 and the SDK swallowed the error.
-    // (External review P0.) See services-rust/common/src/event.rs IngestBatch.
+    // See services-rust/common/src/event.rs IngestBatch.
     const req: ExportRequest = { events, sent_at: new Date().toISOString() } as ExportRequest;
     let res: ExportResponse;
     try {

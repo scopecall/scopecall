@@ -1,8 +1,8 @@
 -- 005_api_key_scopes.sql
 --
 -- Adds a `scopes TEXT[]` column to api_keys so the Settings → API Keys
--- flow can mint keys narrower than "everything". Round-7 review caught
--- that sc_live_* keys were accepted everywhere — a key intended for SDK
+-- flow can mint keys narrower than "everything". Previously sc_live_*
+-- keys were accepted everywhere — a key intended for SDK
 -- ingest could also read traces/costs/prompts. That's true today and
 -- this column is the structured way to fix it forward.
 --

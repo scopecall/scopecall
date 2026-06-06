@@ -196,7 +196,7 @@ func TestDetectCostRegression(t *testing.T) {
 			// (+31.25%) but the absolute delta ($0.25) is below the $1 floor.
 			// This is the case the original test claimed to cover but didn't:
 			// it picked numbers that fell short on pct first, so the delta
-			// floor was never actually exercised. (Q4 from second-pass review.)
+			// floor was never actually exercised.
 			name:    "+31% but $0.25 delta → no signal (delta floor catches it)",
 			curr:    agg(100, 1.05, 0, 0),
 			prior:   agg(100, 0.80, 0, 0), // pct = 31.25%, delta = 0.25

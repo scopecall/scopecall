@@ -156,7 +156,7 @@ describe("prompt_version propagation", () => {
   });
 });
 
-// ─── parent_span_id wiring — Round-2 review P0 ──────────────────────────
+// ─── parent_span_id wiring ──────────────────────────────────────────────
 // Without these, nested LLM calls don't appear under the trace span on
 // the dashboard, breaking the workflow-debugger product story.
 describe("parent_span_id wiring", () => {

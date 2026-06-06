@@ -157,7 +157,6 @@ export function init(config: ScopeCallConfig = {}): ScopeCallSDK {
       // event, LLM calls inside reference a parent_span_id (ctx.spanId)
       // that doesn't exist as a row in ClickHouse — the trace tree
       // query's JOIN finds no parent and the workflow node is invisible.
-      // (Round-3 external review P0.)
       const startTime = Date.now();
       let status: LLMEvent["status"] = "success";
       let errorMessage: string | null = null;

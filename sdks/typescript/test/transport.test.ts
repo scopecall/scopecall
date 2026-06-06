@@ -18,9 +18,9 @@ describe("ConfigError — no transport configured", () => {
 
 describe("toWire() — LLMEvent serialization", () => {
   // Fixture matches the CURRENT contract. `satisfies LLMEvent` enforces
-  // at compile time that we're not regressing the wire shape — Round-3
-  // review flagged the previous fixture as still using the round-1
-  // pre-fix shape (trace_id: null, timestamp: ISO string).
+  // at compile time that we're not regressing the wire shape — the
+  // previous fixture was stale and still used the original pre-fix
+  // shape (trace_id: null, timestamp: ISO string).
   const event = {
     span_id: "abc-123",
     trace_id: "abc-123",         // non-null required; synth single-span trace

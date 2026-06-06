@@ -2,8 +2,8 @@
 -- (and any future "all spans for trace X" query) don't have to scan every
 -- partition for the org.
 --
--- Without this, the third-pass review's S-1 finding holds: the probe in
--- query/trace_tree.go skips partitions only via the timestamp predicate it
+-- Without this, the probe in query/trace_tree.go skips partitions only via
+-- the timestamp predicate it
 -- DERIVES from the probe — but the probe itself scans all 90 days because
 -- trace_id isn't in the primary key (which is org_id, timestamp, span_id).
 -- A bloom_filter index lets ClickHouse skip partitions where trace_id is

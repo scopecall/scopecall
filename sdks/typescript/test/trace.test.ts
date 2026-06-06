@@ -77,9 +77,9 @@ describe("trace()", () => {
   });
 
   it("nested traces INHERIT the outer traceId so the workflow groups together", async () => {
-    // Round-2 review fix: previously every nested trace() got a fresh
-    // traceId, splitting workflows into disconnected spans on the
-    // dashboard. Now nested calls inherit the outer trace's id.
+    // Previously every nested trace() got a fresh traceId, splitting
+    // workflows into disconnected spans on the dashboard. Now nested
+    // calls inherit the outer trace's id.
     const sdk = init({ transport: collectingTransport() });
 
     let outerTraceId: string | undefined;
@@ -112,7 +112,7 @@ describe("trace()", () => {
     expect(new Set(ids).size).toBe(1);
   });
 
-  // ─── workflow-span persistence — Round-3 review P0 ───────────────────
+  // ─── workflow-span persistence ───────────────────────────────────────
   // sdk.trace() must emit one synthetic event per block so the trace
   // tree's JOIN finds a real parent row for child LLM calls. Without
   // these, the dashboard's "workflow node" was virtual.

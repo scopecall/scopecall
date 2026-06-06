@@ -113,7 +113,7 @@ def _traced_create_sync(
     # LLM event still chains correctly even if the stream is consumed
     # AFTER the trace block exits (the FastAPI streaming pattern).
     # Without this, `_context.get_current()` at emit time returns None
-    # and the event becomes orphan. Round-12 review P0b.
+    # and the event becomes orphan.
     ctx_snapshot = _context.get_current()
 
     start_mono = time.monotonic()
@@ -158,7 +158,6 @@ def _wrap_stream_sync(
     use it instead of `_context.get_current()` at emit time so the
     LLM event chains to the right parent even when the caller consumes
     the stream AFTER the enclosing `sdk.trace()` block has exited.
-    Round-12 review P0b.
     """
     chunks_text: list[str] = []
     ttft_ms: int | None = None

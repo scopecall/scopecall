@@ -46,11 +46,11 @@ func (s *SavedViewsServer) ListSavedViews(w http.ResponseWriter, r *http.Request
 // this so an `ingest:write` + `traces:read` API key can't impersonate
 // an org-wide service account and pollute another tenant's UX surface.
 //
-// Round-10 review: a `traces:read` key being able to POST/DELETE saved
-// views contradicted the scope's "read access" promise. Empty-UserID
-// is the simplest correct signal until we promote API-key auth to
-// its own PrincipalClass ("service") — that refactor is on the
-// Cloud-readiness list, not a launch blocker.
+// A `traces:read` key being able to POST/DELETE saved views would
+// contradict the scope's "read access" promise. Empty-UserID is the
+// simplest correct signal until we promote API-key auth to its own
+// PrincipalClass ("service") — that refactor is on the Cloud-readiness
+// list, not a launch blocker.
 func requireUserSession(w http.ResponseWriter, claims *auth.Claims) bool {
 	if claims.UserID == "" {
 		problem.Write(w, http.StatusForbidden, "Forbidden",

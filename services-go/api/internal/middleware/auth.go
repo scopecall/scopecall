@@ -105,7 +105,7 @@ func resolveInternalProxy(r *http.Request, configuredKey string, log *zap.Logger
 	// and the `provided == ""` check above blocks empty client input — but
 	// belt-and-suspenders here makes the property explicit at the actual
 	// compare site, so a future refactor that removes the outer gate can't
-	// silently turn the proxy into "open mode." (T-5 from fourth-pass review.)
+	// silently turn the proxy into "open mode."
 	if configuredKey == "" {
 		return nil, false
 	}
@@ -178,7 +178,7 @@ func resolveAPIKey(ctx context.Context, token string, cfg AuthConfig) (*auth.Cla
 	// Negative cache check FIRST. The revoke endpoint writes
 	// `revoked:<hash>` with a 5-minute TTL the moment a key flips to
 	// revoked=true. Checking this before the positive cache closes the
-	// race the Round-8 reviewer identified:
+	// following race:
 	//
 	//   1. Read request R1 starts, misses the positive cache, queries PG,
 	//      key is still valid.
@@ -206,8 +206,8 @@ func resolveAPIKey(ctx context.Context, token string, cfg AuthConfig) (*auth.Cla
 	// `key:ingest:<hash>` after validating ingest:write. If both services
 	// shared a `key:<hash>` namespace, an ingest-only key (which never
 	// passes our scope check below) would still authenticate to the read
-	// API on every request following the first SDK call. Round-7 review
-	// flagged this; fixed by splitting the namespaces.
+	// API on every request following the first SDK call. Fixed by
+	// splitting the namespaces.
 	cacheKey := "key:read:" + hash
 	if orgID, err := cfg.Redis.Get(ctx, cacheKey).Result(); err == nil {
 		return &auth.Claims{OrgID: orgID, PrincipalClass: "viewer"}, nil

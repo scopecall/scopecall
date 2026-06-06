@@ -40,16 +40,16 @@ def apply_redaction(
     and `ScopeCallSDK.record_llm_call` (manual API) so both paths
     produce identical wire output for the same input.
 
-    Round-12 review P0a: `record_llm_call` previously constructed
-    LLMEvent directly and skipped redaction, contradicting the
-    "redact_pii=True scrubs input/output before leaving the process"
-    promise for manual-instrumentation callers (LangChain / LlamaIndex
-    / custom wrappers). Extracted here so both code paths use the
-    same logic instead of one duplicating the other.
+    `record_llm_call` previously constructed LLMEvent directly and
+    skipped redaction, contradicting the "redact_pii=True scrubs
+    input/output before leaving the process" promise for
+    manual-instrumentation callers (LangChain / LlamaIndex / custom
+    wrappers). Extracted here so both code paths use the same logic
+    instead of one duplicating the other.
     """
     if not sdk._config.capture_content:
-        # capture_content=False overrides any inputs — Round-2 wire
-        # contract: None means "SDK didn't capture", "" means "empty".
+        # capture_content=False overrides any inputs — per the wire
+        # contract, None means "SDK didn't capture", "" means "empty".
         return None, None
 
     redactor = sdk._redactor
@@ -95,8 +95,8 @@ def build_llm_event(
     automatically. Outside a trace, the event is a top-level orphan
     (parent_span_id = None, trace_id minted fresh).
 
-    `ctx_override` exists for the streaming case (Round-12 review P0b):
-    streaming wrappers capture the active context at create() time and
+    `ctx_override` exists for the streaming case: streaming wrappers
+    capture the active context at create() time and
     pass it back here when the stream is consumed — even if the stream
     is iterated AFTER the enclosing `sdk.trace()` block has exited.
     Without it, late stream consumption produces an orphan LLM event
@@ -108,9 +108,9 @@ def build_llm_event(
 
     # ── Redact content if configured ─────────────────────────────────
     # Run BOTH input and output through the same redactor pass — the
-    # symmetry is important. Round-1 review caught a case where input
-    # was redacted but output wasn't, leaking a credit card number
-    # that the model echoed back from a prompt.
+    # symmetry is important. We previously redacted input but not
+    # output, leaking a credit card number that the model echoed back
+    # from a prompt.
     input_text, output_text = apply_redaction(sdk, input_text, output_text)
 
     # ── Resolve trace context ────────────────────────────────────────

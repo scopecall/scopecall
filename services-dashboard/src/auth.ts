@@ -44,7 +44,6 @@ function getPool(): Pool {
 // gets a working proxy (which reads AUTH_SECRET directly), and a broken
 // signin flow (because next-auth was reading NEXTAUTH_SECRET via env auto-
 // detection). One name, one read site, one source of truth.
-// (Fourth-pass review S-3.)
 function resolveAuthSecret(): string | undefined {
   return process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
 }

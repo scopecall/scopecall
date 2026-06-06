@@ -77,7 +77,6 @@ func NewStore(db *sql.DB) *Store { return &Store{db: db} }
 // vs which leak schema details and should be replaced with a generic
 // message. Replaces the previous prefix-sniffing approach in
 // handler/alerts.go — that was fragile to copy/paste rewording.
-// (T-4 from fourth-pass review.)
 // ─────────────────────────────────────────────────────────────────────────────
 
 var (
@@ -97,10 +96,9 @@ var (
 // Implementation: pg_try_advisory_lock(bigint) with a 64-bit FNV-1a hash of
 // the rule ID. We use the single-bigint form rather than (int4, int4) because
 // the 64-bit key space (~1.8e19) makes collisions effectively impossible
-// across realistic rule counts. T-2 in the third-pass review pointed out
-// that FNV-32 has birthday-bound collisions around 65K rules per cluster —
-// a busy multi-tenant deployment could hit that. FNV-64 pushes it to ~5
-// billion rules before collision risk matters.
+// across realistic rule counts. FNV-32 has birthday-bound collisions around
+// 65K rules per cluster — a busy multi-tenant deployment could hit that.
+// FNV-64 pushes it to ~5 billion rules before collision risk matters.
 //
 // Session-scoped (not xact-scoped) so we don't have to hold a transaction
 // open across ClickHouse queries — that would pin Postgres connections for

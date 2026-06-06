@@ -97,7 +97,7 @@ def _traced_create_sync(
     # we pass it into the stream wrapper so the LLM event chains
     # correctly even when iteration happens after the enclosing
     # `sdk.trace()` block has exited. See _openai.py for the long
-    # rationale. Round-12 review P0b.
+    # rationale.
     ctx_snapshot = _context.get_current()
     start_mono = time.monotonic()
     timestamp_ms = now_ms()

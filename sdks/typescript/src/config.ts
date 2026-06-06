@@ -42,9 +42,9 @@ export interface ScopeCallConfig {
    * surface traces. Default 5000ms (5s). Set to 0 to DISABLE auto-flush
    * (rare; tests or callers driving flush manually).
    *
-   * Round-5 external review P0: the README claims "traces appear within
-   * seconds" but without auto-flush that's only true in test harnesses.
-   * Production servers ran forever queuing events with no visible output.
+   * The README claims "traces appear within seconds" but without
+   * auto-flush that's only true in test harnesses. Production servers
+   * ran forever queuing events with no visible output.
    */
   flushIntervalMs?: number;
   /** Disable the SDK entirely — no events emitted. */
@@ -104,7 +104,7 @@ export function validate(config: ScopeCallConfig): void {
   // The previous default — https://ingest.scopecall.com/v1/ingest — points at
   // a hosted-Cloud endpoint that doesn't exist yet. A user who omitted
   // `endpoint` would silently send events into the void with no actionable
-  // signal that anything was wrong. (Round-8 review.)
+  // signal that anything was wrong.
   //
   // For the source-available release we make `endpoint` an explicit
   // requirement and the error tells the user exactly what to supply. When

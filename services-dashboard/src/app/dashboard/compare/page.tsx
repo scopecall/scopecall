@@ -117,7 +117,7 @@ function CompareColumn({ label, traceId, spans, isLoading, error, otherSpans }: 
           // interpolating into a path. A traceId containing `?` would inject
           // a query string; `/../foo` would normalize to an unexpected route.
           // Same-origin same-auth-context so not a security boundary, but it
-          // produces broken links otherwise. (T-8 from fourth-pass review.)
+          // produces broken links otherwise.
           href={`/dashboard/traces/${encodeURIComponent(traceId)}`}
           className="font-mono text-xs hover:underline truncate flex items-center gap-1"
           title="Open this trace"

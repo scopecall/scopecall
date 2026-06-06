@@ -11,7 +11,7 @@
  * Symptom before this declaration: `dark:text-emerald-300` compiled to a
  * literal class selector (`.dark\:text-emerald-300 { … }`) that fired
  * ALL the time, so a status pill stayed emerald-300 text in light theme —
- * unreadable against the cream surface. (Round-6 user-reported.)
+ * unreadable against the cream surface.
  *
  * The `&:where(.dark, .dark *)` selector matches both the .dark element
  * itself and every descendant — covers the case where html.dark holds the

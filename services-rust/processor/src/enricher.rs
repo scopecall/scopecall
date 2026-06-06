@@ -98,7 +98,7 @@ impl Enricher {
         // so a buggy / hostile SDK can't ship a container kind with
         // cost=999999 and poison the (kind-aware) analytics. Trust the
         // kind discriminator, not the SDK-supplied content for that kind.
-        // (Round-4 review P1; expanded for v0.3 agent/step kinds.)
+        // (Expanded for v0.3 agent/step kinds.)
         if matches!(event.event.kind.as_str(), "workflow" | "agent" | "step") {
             event.event.model = String::new();
             event.event.provider = String::new();
@@ -273,8 +273,8 @@ mod tests {
 
     #[test]
     fn enrich_zeros_out_workflow_row_cost_fields_server_side() {
-        // Round-4 review P1: a malicious/buggy SDK could ship
-        // kind=workflow with cost=9999 / fake model / fake tokens to
+        // A malicious/buggy SDK could ship kind=workflow with
+        // cost=9999 / fake model / fake tokens to
         // bypass server-side pricing AND poison kind-aware analytics
         // (workflows are aggregated separately). Force the workflow's
         // LLM-call fields to zero/empty server-side regardless of input.

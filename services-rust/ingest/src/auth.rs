@@ -10,7 +10,7 @@ const NEG_CACHE_KEY: &str = "revoked:";
 // for ingest is NOT automatically valid for the read API. If both services
 // shared `key:<hash>`, a write-scope-only key cached after a successful
 // ingest could bypass the Go API's traces:read enforcement on subsequent
-// requests (Round-7 review fix). The negative cache (`revoked:`) is still
+// requests. The negative cache (`revoked:`) is still
 // shared so a single revoke invalidates both paths.
 const POS_CACHE_KEY: &str = "key:ingest:";
 

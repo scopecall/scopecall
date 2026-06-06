@@ -306,9 +306,9 @@ export default function FlowMapPage() {
       to: range.to.toISOString(),
     });
     // feature_name (NOT "feature") — must match the param Traces reads.
-    // Sixth-pass review caught this: Flow Map and Regressions both used
-    // "feature" but Traces parses "feature_name", so the drill-in
-    // silently dropped the filter and returned the wrong dataset.
+    // Flow Map and Regressions both used "feature" but Traces parses
+    // "feature_name", so the drill-in silently dropped the filter and
+    // returned the wrong dataset.
     if (node.op !== node.model) qs.set("feature_name", node.op);
     router.push(`/dashboard/traces?${qs}`);
   }
@@ -514,8 +514,8 @@ function DetailPanel({
   outbound: GraphEdge[];
   onDrill: () => void;
 }) {
-  // Inline status text — round-6 theme review: -400 shades read on dark
-  // but vanish on the light cream surface. -600 dark:-400 gives both.
+  // Inline status text — light/dark theme split: -400 shades read on
+  // dark but vanish on the light cream surface. -600 dark:-400 gives both.
   const errClass =
     node.error_rate >= 0.03 ? "text-red-600 dark:text-red-400"
     : node.error_rate >= 0.01 ? "text-amber-600 dark:text-amber-400"

@@ -46,7 +46,7 @@ func (s *Store) Create(ctx context.Context, orgID, createdBy, name, path, queryS
 	// could plant a "Cost dashboard" saved view that off-site-phishes every
 	// viewer who clicks it. Also reject `:` to catch `javascript:` / `data:`
 	// and friends, and `\` because Edge/IE used to treat `/\evil.com` as
-	// protocol-relative. (S-3 from third-pass review.)
+	// protocol-relative.
 	if len(path) < 2 || len(path) > 256 || path[0] != '/' {
 		return nil, fmt.Errorf("invalid path")
 	}

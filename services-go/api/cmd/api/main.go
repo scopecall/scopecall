@@ -355,7 +355,7 @@ func main() {
 		// entry + write the 5-minute negative-cache marker. Without it the
 		// revoke endpoint still works (Postgres flag is authoritative) but
 		// the previously-cached entry would keep authenticating for up to
-		// 60s — which is what the Round-7 reviewer correctly flagged.
+		// 60s.
 		keysHandler := &handler.APIKeysServer{Q: queries, Redis: rdb}
 		r.Get("/api/v1/orgs/{org_id}/keys", keysHandler.ListKeys)
 		r.Post("/api/v1/orgs/{org_id}/keys", keysHandler.CreateKey)

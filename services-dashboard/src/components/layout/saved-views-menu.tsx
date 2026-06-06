@@ -38,7 +38,6 @@ export function SavedViewsMenu() {
   // Gate the fetch on orgId. Other queries do this via their `enabled` arg;
   // useSavedViews defaults to enabled. Without this gate, the menu fires a
   // request during the transient pre-auth render and eats a 401+retry.
-  // (D-1 from fifth-pass review.)
   const viewsQ = useSavedViews(!!orgId);
   const create = useCreateSavedView();
   const del = useDeleteSavedView();

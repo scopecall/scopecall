@@ -63,8 +63,7 @@ pub struct LlmEvent {
     // `deserialize_with = "null_to_empty"` makes the ingest tolerate either
     // shape ("" or null) so a mixed-version SDK fleet keeps working during
     // upgrades. This is belt-and-suspenders: the canonical SDK behaviour
-    // is now "" (see TS instrumentation/*.ts buildEvent). Caught by
-    // round-2 external review.
+    // is now "" (see TS instrumentation/*.ts buildEvent).
     #[serde(default, deserialize_with = "null_to_empty")]
     pub input_text: String,
     #[serde(default, deserialize_with = "null_to_empty")]
@@ -176,8 +175,7 @@ fn default_attempt_number() -> u16 {
 // dashboard → React Flow SVG node label. A 9MB feature_name doesn't trigger
 // SQL injection (we escape), but it WILL freeze every dashboard tab that
 // renders that label. Without these caps, a malicious or buggy SDK can DoS
-// every team member's dashboard with a single LLM call. (Fourth-pass review
-// blocker — slipped past 3 prior code reviews because they were Go-focused.)
+// every team member's dashboard with a single LLM call.
 //
 // The caps are sized to be generous for legitimate use:
 //   - Identifiers: ≤128 (UUIDs are 36, our own gen is ~32, hex span IDs ≤64)
@@ -292,7 +290,7 @@ impl LlmEvent {
         // the closed set so a hostile / buggy SDK can't push arbitrary
         // strings into the LowCardinality dictionary AND can't bypass the
         // processor's "skip pricing for container rows" gate by claiming
-        // a container kind with a real cost. (Round-4 review P1.)
+        // a container kind with a real cost.
         //
         // v0.3 expansion: agent + step join workflow as container kinds.
         // They share workflow's semantics (no model, no tokens, no cost

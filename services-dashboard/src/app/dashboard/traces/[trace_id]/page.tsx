@@ -92,8 +92,8 @@ function TreeNode({ node, depth, selectedId, onSelect }: TreeNodeProps) {
             For LLM rows that's cost; for workflow rows cost is $0 and
             uninformative — show duration there instead so the column
             scans as "workflow block took 4.2s" not "workflow $0.00".
-            Round-5 review: workflow rows were rendering like broken
-            LLM calls. */}
+            Without this, workflow rows rendered like broken LLM
+            calls. */}
         <span className="flex items-center gap-2 w-full">
           <span className="flex-1 truncate text-sm">
             {spanLabel(node)}
@@ -213,8 +213,7 @@ function SpanDetail({ span }: { span: Trace | undefined }) {
   // fields are server-zeroed. Rendering them with $0.00 / "0 → 0" makes
   // the row look like a broken LLM call. Branch the field set so workflow
   // detail shows only the fields that have meaning for it: ids, latency
-  // (= block duration), feature, environment, sdk version. (Round-5
-  // review — workflow span UI cleanup.)
+  // (= block duration), feature, environment, sdk version.
   const isWorkflow = isWorkflowSpan(span);
   return (
     <div className="space-y-4">
@@ -322,7 +321,7 @@ function TraceTreeView() {
   // (services-dashboard/src/app/dashboard/traces/page.tsx detailHref).
   // Date.parse → NaN guard: invalid timestamps silently drop the hint
   // (better than throwing — preserves direct-link shareability for old
-  // URLs that lack the params). Round-4 review P1.
+  // URLs that lack the params).
   const rangeHint = (() => {
     const fromStr = searchParams.get("from");
     const toStr = searchParams.get("to");
@@ -404,7 +403,7 @@ function TraceTreeView() {
             via the browser's history stack — drilling Cost → Traces filter
             → trace detail and clicking Back lands you exactly where you
             were. router.push("/dashboard/traces") would have dropped that
-            context (Round-2 review P1). */}
+            context. */}
         <Button variant="ghost" size="sm" onClick={() => router.back()} className="gap-1">
           <ArrowLeft className="h-4 w-4" /> Back
         </Button>
@@ -421,7 +420,7 @@ function TraceTreeView() {
             via the browser's history stack — drilling Cost → Traces filter
             → trace detail and clicking Back lands you exactly where you
             were. router.push("/dashboard/traces") would have dropped that
-            context (Round-2 review P1). */}
+            context. */}
         <Button variant="ghost" size="sm" onClick={() => router.back()} className="gap-1">
           <ArrowLeft className="h-4 w-4" /> Back
         </Button>

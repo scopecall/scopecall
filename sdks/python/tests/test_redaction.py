@@ -1,7 +1,7 @@
 """PII redaction parity tests across manual + auto-instrumented paths.
 
-Round-12 review P0a: the manual API (`record_llm_call`) used to
-construct LLMEvent directly without running the redactor — falsifying
+The manual API (`record_llm_call`) used to construct LLMEvent directly
+without running the redactor — falsifying
 the "redact_pii=True scrubs input/output before leaving the process"
 promise for LangChain / LlamaIndex / custom-wrapper callers.
 
@@ -40,7 +40,7 @@ def _read_events(path: str) -> list[dict[str, Any]]:
 
 
 class TestRecordLlmCallRedaction:
-    """Round-12 P0a — manual API must redact PII when redact_pii=True."""
+    """Manual API must redact PII when redact_pii=True."""
 
     def test_record_llm_call_redacts_pii_by_default(self):
         with tempfile.NamedTemporaryFile(suffix=".jsonl", delete=False) as f:
@@ -65,8 +65,7 @@ class TestRecordLlmCallRedaction:
         events = _read_events(path)
         assert len(events) == 1
         ev = events[0]
-        # Verbatim quote from the reviewer's example — these MUST be
-        # replaced or the redaction promise is false:
+        # These MUST be replaced or the redaction promise is false:
         assert "[EMAIL]" in ev["input_text"]
         assert "[CARD]" in ev["input_text"]
         assert "[PHONE]" in ev["output_text"]

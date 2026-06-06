@@ -110,7 +110,7 @@ type ListTracesResult struct {
 // If a future endpoint wants to put anything beyond pagination position into
 // the cursor (e.g. a filter set the server should "remember"), it MUST sign or
 // HMAC the cursor — otherwise a user could tamper their way to data they
-// shouldn't see. (T-7 from fourth-pass review.)
+// shouldn't see.
 type cursorPayload struct {
 	TS   time.Time `json:"ts"`
 	SPID string    `json:"id"`
@@ -252,7 +252,7 @@ SELECT
 FROM llm_calls
 -- The Traces list page is "your LLM call log" — workflow spans don't fit
 -- the table's columns (model, tokens, cost are all empty). They surface
--- on the trace TREE view (no filter) and the Flow Map. Round-4 review.
+-- on the trace TREE view (no filter) and the Flow Map.
 WHERE org_id = {org_id:String}
   AND kind = 'llm'
   AND timestamp >= {from:DateTime('UTC')}

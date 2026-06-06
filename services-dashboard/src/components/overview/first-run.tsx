@@ -26,8 +26,8 @@ interface Props {
   onFirstCall?: () => void;
 }
 
-// Single-language quickstart. Round-6 review caught this surface drifting
-// from the actual SDK shape — the Python option offered an SDK that doesn't
+// Single-language quickstart. This surface had drifted from the actual
+// SDK shape — the Python option offered an SDK that doesn't
 // ship yet, and the Node snippet used a constructor pattern (`ScopeCall(...)`)
 // that the v0.1.1 SDK doesn't export. The current SDK API is `init(...)` +
 // `sdk.instrument(openai)` + `sdk.trace(...)`. Show ONLY what works today.
@@ -81,9 +81,9 @@ export function FirstRunDashboard({ orgId, onFirstCall }: Props) {
   // Calling onFirstCall() from render is a React anti-pattern that double-
   // fires in Strict Mode and — when the dashboard's "last 24h" window has
   // no data but the SDK-health 7-day window does — produces a persistent
-  // refetch storm. The fifth-pass review caught this; reproducer was the
-  // exact reseed shape the user just loaded (30d data, latest call < 1d
-  // old but >0d, parent's default range = last 24h).
+  // refetch storm. Reproducer was the exact reseed shape the user just
+  // loaded (30d data, latest call < 1d old but >0d, parent's default
+  // range = last 24h).
   const { data } = useSDKHealth(orgId, !!orgId);
   const firedRef = useRef(false);
   useEffect(() => {

@@ -52,7 +52,6 @@ const DIM_PARAM: Record<BreakdownDimension, string> = {
 //
 // `range` is REQUIRED — without it the Traces page snaps to its default 24h
 // window and the drill-in shows none of the cost-page's actual traffic.
-// (Round-2 review P1: cost drill-in still loses context.)
 function drillHref(
   dim: BreakdownDimension,
   key: string,

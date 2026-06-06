@@ -301,7 +301,7 @@ func (e *Evaluator) maybeNotify(ctx context.Context, r Rule, ev *Event, resolved
 		// Drain before Close so the HTTP client can reuse the connection
 		// (keep-alive) on the next Slack post. Without io.Copy, every alert
 		// opens a fresh TCP+TLS handshake — negligible at v1 volume but
-		// trivially fixable. (D3 from sixth-pass review.)
+		// trivially fixable.
 		_, _ = io.Copy(io.Discard, resp.Body)
 		_ = resp.Body.Close()
 		if resp.StatusCode >= 300 {
