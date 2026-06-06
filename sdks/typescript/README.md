@@ -68,18 +68,71 @@ const sdk = init({
 
 ---
 
-## Optional metadata per call
+## Cost attribution hierarchy (v0.3)
 
-Attribute calls to a feature, user, or session via the `trace()` helper.
-Any LLM calls made inside the callback inherit this context.
+`sdk.workflow()` / `sdk.agent()` / `sdk.step()` are three nested
+async-callback helpers that mark different levels of the cost-
+attribution hierarchy. Each emits a distinct container span on exit
+(`kind='workflow'` / `'agent'` / `'step'`), and the ScopeCall dashboard
+rolls up cost from LLM calls to whichever ancestor you wrapped:
 
 ```typescript
-await sdk.trace("customer-support", async () => {
-  return openai.chat.completions.create({
-    model: "gpt-4o",
-    messages: [...],
-  });
-});
+await sdk.workflow(
+  "support-refund",
+  async () => {
+    await sdk.agent("policy_check", async () => {
+      await sdk.step("lookup_policy", async () => {
+        await openai.chat.completions.create({ model: "gpt-4o-mini", messages: [...] });
+      });
+      await sdk.step("verify_eligibility", async () => {
+        await openai.chat.completions.create({ model: "gpt-4o", messages: [...] });
+      });
+    });
+    await sdk.agent("refund_executor", async () => {
+      await sdk.step("draft_response", async () => {
+        await openai.chat.completions.create({ model: "claude-3-5-sonnet", messages: [...] });
+      });
+    });
+  },
+  { customerId: "customer_acme" },          // v0.3: B2B tenant attribution
+);
+```
+
+The dashboard's **Workflow Treemap** shows aggregate cost per workflow.
+Drilling into a workflow surfaces a per-agent and per-step breakdown
+so you can see, e.g., "76% of `support-refund` cost is in
+`refund_executor.draft_response`".
+
+**Nesting is voluntary, not enforced** — wrap only the levels you want
+to attribute. A bare `sdk.workflow()` with no agent/step is fine; cost
+rolls up to the workflow. Agent without step is fine too (the by-agent
+breakdown handles both `workflow → agent → step → llm` and direct
+`workflow → agent → llm` shapes).
+
+`sdk.trace(name, fn, opts?)` remains supported as a backward-compatible
+alias for `sdk.workflow()` — every example in this README that uses
+`sdk.trace(...)` works identically. Use `sdk.workflow()` in new code so
+the cost-attribution intent reads clearly at the call site.
+
+---
+
+## Optional metadata per call
+
+Attribute calls to a feature, user, session, or customer via the
+`workflow()` / `agent()` / `step()` helpers. Any LLM calls made inside
+the callback inherit this context.
+
+```typescript
+await sdk.workflow(
+  "customer-support",
+  async () => {
+    return openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [...],
+    });
+  },
+  { customerId: "customer_acme" },          // v0.3: B2B tenant attribution
+);
 ```
 
 For SDK-wide defaults (applied to every call), set them on `init()`:
@@ -91,8 +144,14 @@ const sdk = init({
   defaultFeature: "customer-support",
   defaultUserId: "user_123",
   defaultSessionId: "session_abc",
+  test: false,                              // v0.3: tag every event is_test=true; also via SCOPECALL_TEST=1
 });
 ```
+
+`test: true` (or `SCOPECALL_TEST=1` env var) tags every event with
+`is_test=true`. The dashboard excludes test-tagged calls from production
+cost reports — useful for vitest/jest runners, CI eval suites, and
+replay tooling that shouldn't pollute the production cost dashboard.
 
 ---
 

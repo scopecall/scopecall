@@ -47,7 +47,11 @@ sdk = scopecall.init(
 # Wrap the OpenAI client — every chat.completions.create call is now traced.
 openai_client = sdk.instrument(OpenAI())
 
-with sdk.trace("support-agent", user_id="user_123") as ctx:
+# sdk.workflow() wraps a logical workflow. Cost from every LLM call
+# inside it rolls up to this workflow on the dashboard's Workflow
+# Treemap. `customer_id` (v0.3) attributes the spend to a specific
+# B2B tenant — surfaces on the /dashboard/customers page.
+with sdk.workflow("support-agent", user_id="user_123", customer_id="customer_acme"):
     response = openai_client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[{"role": "user", "content": "Hello"}],
@@ -55,6 +59,11 @@ with sdk.trace("support-agent", user_id="user_123") as ctx:
 
 # Traces appear in your dashboard within seconds.
 ```
+
+`sdk.trace(name)` is a backward-compatible alias — every example in this
+README that uses `sdk.trace(...)` works identically. Use `sdk.workflow()`
+in new code so the cost-attribution intent reads clearly at the call
+site.
 
 > **No hosted-Cloud default yet.** A managed default endpoint will
 > return when ScopeCall Cloud is live. Until then, `init()` requires
@@ -76,8 +85,14 @@ sdk = scopecall.init(
     max_retries=3,                               # optional; retry attempts on transient failure
     flush_interval=5.0,                          # optional; seconds between auto-flush
     debug=False,                                 # optional; route events to stdout instead of HTTP
+    test=False,                                  # v0.3: tag every event is_test=true; also via SCOPECALL_TEST=1
 )
 ```
+
+`test=True` (or `SCOPECALL_TEST=1` env var) tags every event with
+`is_test=true`. The dashboard excludes test-tagged calls from production
+cost reports — useful for eval suites, CI runs, and replay tooling that
+shouldn't pollute the production cost dashboard.
 
 Other transport modes:
 
@@ -159,14 +174,59 @@ same trace get the right `parent_span_id` automatically.
 
 ---
 
-## Workflow tracing
+## Cost attribution hierarchy (v0.3)
 
-The `sdk.trace(name)` block emits a synthetic **workflow span** when it
-exits, so the ScopeCall dashboard can render the parent → child
-structure of multi-call agents:
+`sdk.workflow()` / `sdk.agent()` / `sdk.step()` are three nested context
+managers that mark different levels of the cost-attribution hierarchy.
+Each emits a distinct container span on exit (`kind='workflow'` /
+`'agent'` / `'step'`), and the dashboard rolls up cost from LLM calls
+to whichever ancestor you wrapped:
 
 ```python
-with sdk.trace("rag-question", user_id=user_id, session_id=session_id):
+with sdk.workflow("support-refund", customer_id="customer_acme"):
+    with sdk.agent("policy_check"):
+        with sdk.step("lookup_policy"):
+            openai_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[...],
+            )
+        with sdk.step("verify_eligibility"):
+            openai_client.chat.completions.create(
+                model="gpt-4o",
+                messages=[...],
+            )
+    with sdk.agent("refund_executor"):
+        with sdk.step("draft_response"):
+            openai_client.chat.completions.create(
+                model="claude-3-5-sonnet",
+                messages=[...],
+            )
+```
+
+The dashboard's **Workflow Treemap** shows aggregate cost per workflow.
+Drilling into a workflow surfaces a per-agent and per-step breakdown,
+so you can see "76% of `support-refund` cost is in
+`refund_executor.draft_response`" at a glance.
+
+**Nesting is voluntary, not enforced** — wrap only the levels you want
+to attribute. A bare `sdk.workflow()` with no agent/step inside is
+fine; cost rolls up to the workflow. Agent without step is fine too
+(the by-agent breakdown handles both `workflow → agent → step → llm`
+and `workflow → agent → llm` shapes).
+
+`sdk.trace(name)` remains supported as a backward-compatible alias for
+`sdk.workflow(name)`. Choose whichever reads better at the call site.
+
+---
+
+## Workflow tracing
+
+The `sdk.workflow(name)` block (or its alias `sdk.trace(name)`) emits a
+synthetic **workflow span** when it exits, so the ScopeCall dashboard
+can render the parent → child structure of multi-call agents:
+
+```python
+with sdk.workflow("rag-question", user_id=user_id, session_id=session_id):
     # 1) retrieve documents (could itself be an LLM call)
     docs = retriever.retrieve(question)
 
@@ -235,8 +295,13 @@ sdk = scopecall.init(
 )
 
 # Per-call overrides win over defaults; nested-trace inheritance fills
-# the gap for prompt_version (trace > parent > default > None).
-with sdk.trace("billing-agent", user_id=user.id, prompt_version="refund-v3"):
+# the gap for prompt_version + customer_id (trace > parent > default > None).
+with sdk.workflow(
+    "billing-agent",
+    user_id=user.id,
+    customer_id=user.org_slug,                    # v0.3: B2B tenant attribution
+    prompt_version="refund-v3",
+):
     ...
 ```
 
@@ -275,7 +340,7 @@ can't see through to the raw call. Use `sdk.record_llm_call()` to emit
 events manually — same wire format, same trace-context chaining:
 
 ```python
-with sdk.trace("rag-answer"):
+with sdk.workflow("rag-answer", customer_id=tenant_id):
     docs = retriever.retrieve(q)         # your code, not instrumented
 
     # ... call your custom LLM wrapper ...
@@ -288,6 +353,13 @@ with sdk.trace("rag-answer"):
         input_text=prompt,
         output_text=answer,
         finish_reason="stop",
+        # v0.3 — retry attribution. The dashboard's Waste Inbox surfaces
+        # workflows where retry_cost is a large fraction of total cost.
+        # retry_reason is a closed enum: rate_limit | timeout |
+        # server_error | transient_network | agent_decision | manual |
+        # unknown.
+        attempt_number=2,
+        retry_reason="rate_limit",
     )
 ```
 
@@ -298,17 +370,24 @@ and output run through the same scrubber the auto-instrumented path
 uses.
 
 For deeper sub-step instrumentation (e.g. "retrieve" and "rerank" as
-separate visible spans), nest `sdk.trace()` blocks rather than reaching
-for a sub-span helper. Each nested `trace` block emits its own
-workflow span and chains correctly:
+separate visible spans), nest `sdk.agent()` / `sdk.step()` inside the
+workflow rather than reaching for a sub-span helper. Each block emits
+its own container span and chains correctly:
 
 ```python
-with sdk.trace("rag-answer"):
-    with sdk.trace("retrieve"):
+with sdk.workflow("rag-answer"):
+    with sdk.step("retrieve"):
         docs = retriever.retrieve(q)
-    with sdk.trace("generate"):
+    with sdk.step("generate"):
         sdk.record_llm_call(...)
 ```
+
+This is the same shape the dashboard's workflow detail page expects
+when it renders the per-step cost breakdown. Pre-v0.3 code using
+nested `sdk.trace()` blocks still works — every `sdk.trace()` is
+treated as a `kind='workflow'` span. The newer hierarchy just makes
+the intent (and the dashboard's by-agent / by-step breakdowns) read
+more naturally.
 
 ---
 

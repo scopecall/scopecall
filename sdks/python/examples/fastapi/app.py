@@ -3,9 +3,11 @@
 This is the smallest realistic shape of a production AI app:
 
   - A single FastAPI route accepts a user question + optional session id.
-  - The handler wraps the LLM call in `sdk.trace("chat-api")` so it
-    shows up in the ScopeCall dashboard as a workflow span with the
-    `chat.completions.create` call as its child.
+  - The handler wraps the LLM call in `sdk.workflow("chat-api", ...)` so
+    it shows up in the ScopeCall dashboard as a workflow node with the
+    `chat.completions.create` call as its child. Cost rolls up to the
+    workflow on the Workflow Treemap, and the per-customer breakdown
+    on the Customers page reads `customer_id` straight off the request.
   - Streaming returns chunks to the client as they arrive (FastAPI
     StreamingResponse) while still capturing the full completion + TTFT
     on the ScopeCall side.
@@ -104,6 +106,10 @@ class Message(BaseModel):
 class ChatRequest(BaseModel):
     user_id: str
     session_id: str | None = None
+    # v0.3 — B2B tenant attribution. Optional in this example for
+    # backward-compat; in production, derive this from your auth context
+    # (e.g. the tenant slug on the JWT) rather than trusting the request.
+    customer_id: str | None = None
     messages: list[Message]
     # Setting `stream=False` here matches OpenAI's API shape so the
     # caller's mental model is the same.
@@ -148,12 +154,13 @@ async def chat(req: ChatRequest):
     messages = [m.model_dump() for m in req.messages]
 
     if not req.stream:
-        # Non-streaming: trace block wraps the await — workflow latency
+        # Non-streaming: workflow block wraps the await — workflow latency
         # = full request latency, LLM event chains correctly.
-        with sdk.trace(
+        with sdk.workflow(
             "chat-api",
             user_id=req.user_id,
             session_id=req.session_id,
+            customer_id=req.customer_id,        # v0.3: B2B tenant attribution
             feature_name="chat",
         ):
             response = await openai_client.chat.completions.create(
@@ -170,17 +177,18 @@ async def chat(req: ChatRequest):
                 },
             }
 
-    # Streaming: keep the trace open across the whole iteration so
-    # workflow latency measures the full client-perceived duration.
+    # Streaming: keep the workflow block open across the whole iteration
+    # so workflow latency measures the full client-perceived duration.
     # FastAPI's StreamingResponse calls the iterator AFTER this handler
-    # returns, so the trace block has to live inside the generator —
+    # returns, so the workflow block has to live inside the generator —
     # not around the call to .create() the way one would naturally
     # write it.
     async def event_source() -> AsyncIterator[bytes]:
-        with sdk.trace(
+        with sdk.workflow(
             "chat-api",
             user_id=req.user_id,
             session_id=req.session_id,
+            customer_id=req.customer_id,        # v0.3: B2B tenant attribution
             feature_name="chat",
         ):
             stream = await openai_client.chat.completions.create(
