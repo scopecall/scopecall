@@ -16,21 +16,21 @@ import (
 // the empty-string key so users can drill into "what fraction of calls aren't
 // tagged yet?". The frontend renders that bucket as "(untagged)".
 type PromptRow struct {
-	Version       string
-	Calls         uint64
-	TotalCostUSD  float64
+	Version        string
+	Calls          uint64
+	TotalCostUSD   float64
 	AvgCostPerCall float64
 	// p50 / p95 latency in ms. quantileExact is used (not quantile) so the
 	// numbers are reproducible — the dashboard table is the kind of place
 	// where a user re-runs a query and expects the same value to come back.
-	P50LatencyMS  float64
-	P95LatencyMS  float64
+	P50LatencyMS    float64
+	P95LatencyMS    float64
 	AvgInputTokens  float64
 	AvgOutputTokens float64
-	ErrorCount    uint64
-	ErrorRate     float64 // 0..1
-	FirstSeen     time.Time
-	LastSeen      time.Time
+	ErrorCount      uint64
+	ErrorRate       float64 // 0..1
+	FirstSeen       time.Time
+	LastSeen        time.Time
 }
 
 const (
@@ -74,7 +74,9 @@ func ListPrompts(
 	if len(conds) > 0 {
 		whereExtra = ""
 		for i, c := range conds {
-			if i > 0 { whereExtra += " AND " }
+			if i > 0 {
+				whereExtra += " AND "
+			}
 			whereExtra += c
 		}
 	}

@@ -346,7 +346,7 @@ func (s *APIKeysServer) RevokeKey(w http.ResponseWriter, r *http.Request) {
 func invalidateKeyCache(rdb *redis.Client, keyHash string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	rdb.Del(ctx, "key:read:"+keyHash)        //nolint:errcheck
-	rdb.Del(ctx, "key:ingest:"+keyHash)      //nolint:errcheck
+	rdb.Del(ctx, "key:read:"+keyHash)                    //nolint:errcheck
+	rdb.Del(ctx, "key:ingest:"+keyHash)                  //nolint:errcheck
 	rdb.Set(ctx, "revoked:"+keyHash, "1", 5*time.Minute) //nolint:errcheck
 }

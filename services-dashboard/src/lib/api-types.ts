@@ -863,11 +863,11 @@ export interface operations {
                 prompt_version?: string;
                 /** @description v0.3 — B2B tenant filter. Drilled into from /dashboard/customers and the workflow-detail by-customer panel. Pass __null__ to show calls with no customer_id (the "Unattributed" tile on the Customers page). */
                 customer_id?: string;
-                /** @description v0.3 — scope to all calls inside the named workflow. Resolves to a trace_id IN-subquery against kind='workflow' rows whose feature_name equals this value. Use this instead of feature_name when drilling in from the Workflow Treemap, Waste Inbox, or workflow detail page — feature_name on LLM rows is the step/call name and would silently miss the calls you want. */
+                /** @description v0.3 — scope to all calls inside the named workflow. Trace-level filter: resolves to `trace_id IN (SELECT trace_id FROM llm_calls WHERE kind='workflow' AND feature_name = ?)`. Use this instead of feature_name when drilling in from the Workflow Treemap, Waste Inbox, or workflow detail page — feature_name on LLM rows is the step/call name and would silently miss the calls you want. */
                 workflow?: string;
-                /** @description v0.3 — scope to all calls inside the named agent (kind='agent' spans). Pair with `workflow` for "calls inside this agent of this workflow". Same trace_id IN-subquery pattern as `workflow`. */
+                /** @description v0.3 — scope to all calls inside the named agent (kind='agent' spans). Ancestor-based filter (up to two hops): resolves to `parent_span_id IN (agent.span_id UNION ALL step.span_id WHERE step.parent_span_id = agent.span_id)` so calls sitting directly under the agent AND calls sitting under a step which sits under the agent both match. Pair with `workflow` for "calls inside this agent of this workflow". */
                 agent?: string;
-                /** @description v0.3 — scope to all calls inside the named step (kind='step' spans). Same trace_id IN-subquery pattern as `workflow`. */
+                /** @description v0.3 — scope to all calls inside the named step (kind='step' spans). Direct-parent filter: resolves to `parent_span_id IN (SELECT span_id FROM llm_calls WHERE kind='step' AND feature_name = ?)`. Returns only LLM calls whose immediate parent is the matching step span. */
                 step?: string;
                 /** @description Free-text search. Exact-match on span_id / trace_id / session_id / user_id; case-insensitive substring on input_text / output_text / error_message (text-column matching skipped for viewer role). */
                 q?: string;

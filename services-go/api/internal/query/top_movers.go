@@ -11,15 +11,15 @@ import (
 // "Current" is the requested window; "Prior" is the same-sized window
 // immediately preceding it.
 type TopMoverRow struct {
-	Key             string
-	CurrentCostUSD  float64
-	PriorCostUSD    float64
-	DeltaCostUSD    float64
-	CurrentCalls    uint64
-	PriorCalls      uint64
-	CurrentP99MS    float64
-	PriorP99MS      float64
-	DeltaP99MS      float64
+	Key            string
+	CurrentCostUSD float64
+	PriorCostUSD   float64
+	DeltaCostUSD   float64
+	CurrentCalls   uint64
+	PriorCalls     uint64
+	CurrentP99MS   float64
+	PriorP99MS     float64
+	DeltaP99MS     float64
 }
 
 // TopMovers returns the N dimension values with the biggest cost change between

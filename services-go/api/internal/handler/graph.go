@@ -97,9 +97,9 @@ func (s *Server) GetGraphExpandHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 type graphNodeJSON struct {
-	ID           string  `json:"id"`
-	Op           string  `json:"op"`
-	Model        string  `json:"model"`
+	ID    string `json:"id"`
+	Op    string `json:"op"`
+	Model string `json:"model"`
 	// "llm" | "workflow" — discriminator the Flow Map's frontend uses to
 	// render workflow containers as squares vs LLM calls as circles. This
 	// hand-defined response struct shadowed query.GraphNode.Kind in

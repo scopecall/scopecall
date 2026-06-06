@@ -224,10 +224,10 @@ func (s *AlertsServer) EventTraces(w http.ResponseWriter, r *http.Request) {
 		"traces": traces,
 		// Echo back the window so the frontend can label "looking in the 5
 		// minutes before fire time" without a second roundtrip.
-		"window_from":     ewr.Event.FiredAt.Add(-time.Duration(ewr.Rule.WindowSeconds) * time.Second),
-		"window_to":       ewr.Event.FiredAt,
-		"window_seconds":  ewr.Rule.WindowSeconds,
-		"rule_type":       ewr.Rule.Type,
+		"window_from":    ewr.Event.FiredAt.Add(-time.Duration(ewr.Rule.WindowSeconds) * time.Second),
+		"window_to":      ewr.Event.FiredAt,
+		"window_seconds": ewr.Rule.WindowSeconds,
+		"rule_type":      ewr.Rule.Type,
 	})
 }
 

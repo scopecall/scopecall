@@ -52,14 +52,19 @@ type WorkflowDetailResult struct {
 // (cost lives on the LLM rows; workflow/agent/step container rows are
 // zeroed by the processor — see reprice() in enricher.rs).
 //
-// Agent / step attribution: 2-hop self-join on parent_span_id.
-//   - kind='llm'   .parent_span_id → kind='step'   .span_id
-//   - kind='step'  .parent_span_id → kind='agent'  .span_id
+// Agent / step attribution handles both legitimate structural shapes:
 //
-// LLM rows without a step ancestor (bare sdk.record_llm_call() inside a
-// workflow but outside any sdk.step()) collapse into a "" bucket on each
-// breakdown — surfaced as "(no agent)" / "(no step)" on the frontend so the
-// gap is visible.
+//   - workflow → agent → step → llm    (canonical 3-level hierarchy)
+//   - workflow → agent → llm           (no step wrapper — agent is the
+//     direct parent of the LLM call)
+//
+// The by-agent breakdown coalesces both paths so cost from agents that
+// don't subdivide into steps still attributes correctly (was previously
+// silently bucketed into "(no agent)" — see the comment on byAgentQ).
+// LLM rows with no agent ancestor at all (bare sdk.record_llm_call()
+// inside a workflow but outside any sdk.agent() / sdk.step()) collapse
+// into a "" bucket on each breakdown — surfaced as "(no agent)" /
+// "(no step)" on the frontend so the gap is visible.
 func WorkflowDetail(ctx context.Context, ch driver.Conn, orgID, workflowName string, tw TimeWindow) (*WorkflowDetailResult, error) {
 	duration := tw.To.Sub(tw.From)
 	priorFrom := tw.From.Add(-duration)

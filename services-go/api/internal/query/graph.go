@@ -25,16 +25,16 @@ const (
 // so the user can visually parse "this is a workflow that fans out to
 // these LLM calls" instead of seeing every node as a flat call.
 type GraphNode struct {
-	ID            string  `json:"id"`
-	Op            string  `json:"op"`     // feature_name OR model (the "what" of the operation)
-	Model         string  `json:"model"`  // the actual LLM model; empty for workflow nodes
-	Kind          string  `json:"kind"`   // "llm" | "workflow" — discriminator for rendering
-	Calls         uint64  `json:"calls"`
-	TotalCostUSD  float64 `json:"total_cost_usd"`
-	AvgLatencyMS  float64 `json:"avg_latency_ms"`
-	P99LatencyMS  float64 `json:"p99_latency_ms"`
-	ErrorCount    uint64  `json:"error_count"`
-	ErrorRate     float64 `json:"error_rate"` // 0..1
+	ID           string  `json:"id"`
+	Op           string  `json:"op"`    // feature_name OR model (the "what" of the operation)
+	Model        string  `json:"model"` // the actual LLM model; empty for workflow nodes
+	Kind         string  `json:"kind"`  // "llm" | "workflow" — discriminator for rendering
+	Calls        uint64  `json:"calls"`
+	TotalCostUSD float64 `json:"total_cost_usd"`
+	AvgLatencyMS float64 `json:"avg_latency_ms"`
+	P99LatencyMS float64 `json:"p99_latency_ms"`
+	ErrorCount   uint64  `json:"error_count"`
+	ErrorRate    float64 `json:"error_rate"` // 0..1
 }
 
 // GraphEdge is a parent→child transition between two nodes, aggregated across
@@ -57,10 +57,11 @@ type GraphResult struct {
 // guarantees a CONNECTED graph, which is the whole point of the view.
 //
 // Why edge-first (vs. top-N nodes by volume):
-//   Most LLM-app traffic is single-call leaves (no parent, no children).
-//   Picking nodes by call volume surfaces those leaves and drops every chain,
-//   leaving the user staring at a disconnected stack. Picking edges first
-//   guarantees every node displayed has at least one connection.
+//
+//	Most LLM-app traffic is single-call leaves (no parent, no children).
+//	Picking nodes by call volume surfaces those leaves and drops every chain,
+//	leaving the user staring at a disconnected stack. Picking edges first
+//	guarantees every node displayed has at least one connection.
 //
 // Node identity = (coalesce(feature_name, model), model). When feature_name
 // is set, that's the user's logical operation name ("summarize", "embed");

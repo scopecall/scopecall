@@ -40,17 +40,17 @@ import (
 // ── Wire types (must match Rust DlqEnvelope in processor/src/dlq.rs) ─────────
 
 type EnrichedEvent struct {
-	OrgID       string  `json:"org_id"`
-	TraceID     string  `json:"trace_id"`
-	SpanID      string  `json:"span_id"`
-	Model       string  `json:"model"`
-	Provider    string  `json:"provider"`
-	InputTokens uint32  `json:"input_tokens"`
-	OutputTokens uint32 `json:"output_tokens"`
-	CostUSD     float64 `json:"cost_usd"`
-	Status      string  `json:"status"`
-	Environment string  `json:"environment"`
-	SDKVersion  string  `json:"sdk_version"`
+	OrgID        string  `json:"org_id"`
+	TraceID      string  `json:"trace_id"`
+	SpanID       string  `json:"span_id"`
+	Model        string  `json:"model"`
+	Provider     string  `json:"provider"`
+	InputTokens  uint32  `json:"input_tokens"`
+	OutputTokens uint32  `json:"output_tokens"`
+	CostUSD      float64 `json:"cost_usd"`
+	Status       string  `json:"status"`
+	Environment  string  `json:"environment"`
+	SDKVersion   string  `json:"sdk_version"`
 }
 
 type DlqEnvelope struct {

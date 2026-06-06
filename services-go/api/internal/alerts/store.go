@@ -13,9 +13,9 @@ import (
 type RuleType string
 
 const (
-	RuleCostSpike   RuleType = "cost_spike"
-	RuleErrorRate   RuleType = "error_rate"
-	RuleLatencyP99  RuleType = "latency_p99"
+	RuleCostSpike  RuleType = "cost_spike"
+	RuleErrorRate  RuleType = "error_rate"
+	RuleLatencyP99 RuleType = "latency_p99"
 )
 
 func validRuleType(t string) bool {

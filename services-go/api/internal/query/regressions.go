@@ -59,22 +59,22 @@ type aggregate struct {
 const (
 	minCallsForDetection = 50
 
-	p99PctThreshold       = 50.0  // % relative jump
-	p99MinCurrentMS       = 500.0 // floor — don't flag 10ms→16ms
-	p99MinPriorMS         = 100.0 // need a meaningful baseline
-	p99CriticalPctChange  = 100.0 // doubled = critical
+	p99PctThreshold      = 50.0  // % relative jump
+	p99MinCurrentMS      = 500.0 // floor — don't flag 10ms→16ms
+	p99MinPriorMS        = 100.0 // need a meaningful baseline
+	p99CriticalPctChange = 100.0 // doubled = critical
 
-	errorRateAbsThreshold      = 2.0 // percentage points jump
-	errorRateMinCurrentPct     = 2.0 // current must be elevated
-	errorRateCriticalCurrent   = 5.0 // current ≥5% always critical
+	errorRateAbsThreshold    = 2.0 // percentage points jump
+	errorRateMinCurrentPct   = 2.0 // current must be elevated
+	errorRateCriticalCurrent = 5.0 // current ≥5% always critical
 
 	costPctThreshold      = 30.0 // % relative
 	costMinCurrentUSD     = 1.0
 	costMinDeltaUSD       = 1.0
 	costCriticalPctChange = 100.0 // doubled cost = critical
 
-	volumeDropPctThreshold = 50.0 // -50% or worse
-	volumeDropMinPriorCalls = 200 // need to have BEEN active before flagging
+	volumeDropPctThreshold  = 50.0 // -50% or worse
+	volumeDropMinPriorCalls = 200  // need to have BEEN active before flagging
 )
 
 // Regressions detects metric-level regressions between the current window

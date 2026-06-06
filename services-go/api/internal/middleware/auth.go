@@ -13,9 +13,9 @@ import (
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 
-	"github.com/scopecall/services-go/common/auth"
 	"github.com/scopecall/services-go/api/internal/db"
 	"github.com/scopecall/services-go/api/internal/problem"
+	"github.com/scopecall/services-go/common/auth"
 )
 
 type contextKey int
@@ -23,14 +23,14 @@ type contextKey int
 const claimsKey contextKey = 0
 
 type AuthConfig struct {
-	JWKSCache       *auth.JWKSCache
-	Redis           *redis.Client
-	Queries         *db.Queries
-	Log             *zap.Logger
+	JWKSCache *auth.JWKSCache
+	Redis     *redis.Client
+	Queries   *db.Queries
+	Log       *zap.Logger
 	// InternalAPIKey, when non-empty, enables the trusted-proxy auth path.
 	// Set from INTERNAL_API_KEY env var. Used exclusively for Next.js dashboard
 	// proxy requests (self-hosted mode). See resolveInternalProxy().
-	InternalAPIKey  string
+	InternalAPIKey string
 }
 
 // Authenticate validates incoming requests using one of three trust paths:

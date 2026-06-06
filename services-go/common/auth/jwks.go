@@ -25,9 +25,9 @@ type jwksResponse struct {
 // JWKSCache caches RSA public keys fetched from the JWKS endpoint.
 // Re-fetches at most once per minute on key ID miss to handle key rotation.
 type JWKSCache struct {
-	url      string
-	mu       sync.RWMutex
-	keys     map[string]*rsa.PublicKey
+	url       string
+	mu        sync.RWMutex
+	keys      map[string]*rsa.PublicKey
 	lastFetch time.Time
 }
 

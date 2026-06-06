@@ -68,8 +68,8 @@ func newBufferingRecorder() *bufferingRecorder {
 	return &bufferingRecorder{statusCode: http.StatusOK, headerMap: make(http.Header)}
 }
 
-func (b *bufferingRecorder) Header() http.Header        { return b.headerMap }
-func (b *bufferingRecorder) WriteHeader(code int)       { b.statusCode = code }
+func (b *bufferingRecorder) Header() http.Header         { return b.headerMap }
+func (b *bufferingRecorder) WriteHeader(code int)        { b.statusCode = code }
 func (b *bufferingRecorder) Write(p []byte) (int, error) { return b.body.Write(p) }
 
 // sfResult is what each singleflight call returns. Carries enough info for

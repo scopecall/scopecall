@@ -17,31 +17,31 @@ import (
 // /breakdown: regenerating api.gen.go restructures every endpoint's error
 // responses). Pointer fields express the nullable spec properties.
 type traceSpanJSON struct {
-	OrgID        string     `json:"org_id"`
-	TraceID      string     `json:"trace_id"`
-	SpanID       string     `json:"span_id"`
-	ParentSpanID *string    `json:"parent_span_id,omitempty"`
-	Timestamp    time.Time  `json:"timestamp"`
-	Model        string     `json:"model"`
-	Provider     string     `json:"provider"`
-	InputTokens   uint32     `json:"input_tokens"`
-	OutputTokens  uint32     `json:"output_tokens"`
-	CostUSD       float64    `json:"cost_usd"`
-	InputCostUSD  float64    `json:"input_cost_usd"`
-	OutputCostUSD float64    `json:"output_cost_usd"`
-	LatencyMS     uint32     `json:"latency_ms"`
-	TTFTMS       *uint32    `json:"ttft_ms,omitempty"`
-	Status       string     `json:"status"`
-	ErrorMessage *string    `json:"error_message,omitempty"`
-	InputText    string     `json:"input_text"`
-	OutputText   string     `json:"output_text"`
-	FeatureName  *string    `json:"feature_name,omitempty"`
-	UserID       *string    `json:"user_id,omitempty"`
-	SessionID    *string    `json:"session_id,omitempty"`
-	Environment  string     `json:"environment"`
-	SDKVersion    string     `json:"sdk_version,omitempty"`
-	Extra         *string    `json:"extra,omitempty"`
-	PromptVersion *string    `json:"prompt_version,omitempty"`
+	OrgID         string    `json:"org_id"`
+	TraceID       string    `json:"trace_id"`
+	SpanID        string    `json:"span_id"`
+	ParentSpanID  *string   `json:"parent_span_id,omitempty"`
+	Timestamp     time.Time `json:"timestamp"`
+	Model         string    `json:"model"`
+	Provider      string    `json:"provider"`
+	InputTokens   uint32    `json:"input_tokens"`
+	OutputTokens  uint32    `json:"output_tokens"`
+	CostUSD       float64   `json:"cost_usd"`
+	InputCostUSD  float64   `json:"input_cost_usd"`
+	OutputCostUSD float64   `json:"output_cost_usd"`
+	LatencyMS     uint32    `json:"latency_ms"`
+	TTFTMS        *uint32   `json:"ttft_ms,omitempty"`
+	Status        string    `json:"status"`
+	ErrorMessage  *string   `json:"error_message,omitempty"`
+	InputText     string    `json:"input_text"`
+	OutputText    string    `json:"output_text"`
+	FeatureName   *string   `json:"feature_name,omitempty"`
+	UserID        *string   `json:"user_id,omitempty"`
+	SessionID     *string   `json:"session_id,omitempty"`
+	Environment   string    `json:"environment"`
+	SDKVersion    string    `json:"sdk_version,omitempty"`
+	Extra         *string   `json:"extra,omitempty"`
+	PromptVersion *string   `json:"prompt_version,omitempty"`
 	// "llm" or "workflow" — see schemas/clickhouse/004_span_kind.sql.
 	// Trace tree consumers (frontend tree + gantt views) render workflow
 	// rows differently (no model badge, no cost summary) because they're
@@ -106,28 +106,28 @@ func (s *Server) GetTraceTreeHTTP(w http.ResponseWriter, r *http.Request) {
 	resp := traceTreeResponseJSON{Spans: make([]traceSpanJSON, 0, len(spans))}
 	for _, s := range spans {
 		resp.Spans = append(resp.Spans, traceSpanJSON{
-			OrgID:        s.OrgID,
-			TraceID:      s.TraceID,
-			SpanID:       s.SpanID,
-			ParentSpanID: s.ParentSpanID,
-			Timestamp:    s.Timestamp,
-			Model:        s.Model,
-			Provider:     s.Provider,
+			OrgID:         s.OrgID,
+			TraceID:       s.TraceID,
+			SpanID:        s.SpanID,
+			ParentSpanID:  s.ParentSpanID,
+			Timestamp:     s.Timestamp,
+			Model:         s.Model,
+			Provider:      s.Provider,
 			InputTokens:   s.InputTokens,
 			OutputTokens:  s.OutputTokens,
 			CostUSD:       s.CostUSD,
 			InputCostUSD:  s.InputCostUSD,
 			OutputCostUSD: s.OutputCostUSD,
 			LatencyMS:     s.LatencyMS,
-			TTFTMS:       s.TTFTMS,
-			Status:       s.Status,
-			ErrorMessage: s.ErrorMessage,
-			InputText:    s.InputText,
-			OutputText:   s.OutputText,
-			FeatureName:  s.FeatureName,
-			UserID:       s.UserID,
-			SessionID:    s.SessionID,
-			Environment:  s.Environment,
+			TTFTMS:        s.TTFTMS,
+			Status:        s.Status,
+			ErrorMessage:  s.ErrorMessage,
+			InputText:     s.InputText,
+			OutputText:    s.OutputText,
+			FeatureName:   s.FeatureName,
+			UserID:        s.UserID,
+			SessionID:     s.SessionID,
+			Environment:   s.Environment,
 			SDKVersion:    s.SDKVersion,
 			Extra:         s.Extra,
 			PromptVersion: s.PromptVersion,

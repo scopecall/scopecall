@@ -21,18 +21,18 @@ type topMoverJSON struct {
 	// "exactly -1% drop". Old clients can still read pct_change == -1 as
 	// before; new clients should check this boolean instead — the float
 	// equality check was unreliable and collided with real -1% deltas.
-	IsNew          bool    `json:"is_new"`
-	CurrentCalls   int     `json:"current_calls"`
-	PriorCalls     int     `json:"prior_calls"`
-	CurrentP99MS   float64 `json:"current_p99_ms"`
-	PriorP99MS     float64 `json:"prior_p99_ms"`
-	DeltaP99MS     float64 `json:"delta_p99_ms"`
+	IsNew        bool    `json:"is_new"`
+	CurrentCalls int     `json:"current_calls"`
+	PriorCalls   int     `json:"prior_calls"`
+	CurrentP99MS float64 `json:"current_p99_ms"`
+	PriorP99MS   float64 `json:"prior_p99_ms"`
+	DeltaP99MS   float64 `json:"delta_p99_ms"`
 }
 
 type topMoversResponseJSON struct {
-	GroupBy          string         `json:"group_by"`
-	WindowSeconds    int            `json:"window_seconds"`
-	Rows             []topMoverJSON `json:"rows"`
+	GroupBy       string         `json:"group_by"`
+	WindowSeconds int            `json:"window_seconds"`
+	Rows          []topMoverJSON `json:"rows"`
 }
 
 // GetTopMoversHTTP serves GET /api/v1/metrics/top-movers — compares the

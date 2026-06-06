@@ -14,13 +14,13 @@ import (
 // an alert firing and the user actually debugging the cause.
 type AlertTraceRow struct {
 	TraceID     string    `json:"trace_id"`
-	SpanID      string    `json:"span_id"`        // representative span (most expensive/slowest/errored)
+	SpanID      string    `json:"span_id"` // representative span (most expensive/slowest/errored)
 	Model       string    `json:"model"`
 	FeatureName string    `json:"feature_name,omitempty"`
 	Status      string    `json:"status"`
 	LatencyMS   uint32    `json:"latency_ms"`
-	CostUSD     float64   `json:"cost_usd"`        // trace total
-	ErrorCount  uint32    `json:"error_count"`     // spans with status=error in the trace
+	CostUSD     float64   `json:"cost_usd"`    // trace total
+	ErrorCount  uint32    `json:"error_count"` // spans with status=error in the trace
 	Timestamp   time.Time `json:"timestamp"`
 }
 

@@ -314,8 +314,8 @@ func (e *Evaluator) maybeNotify(ctx context.Context, r Rule, ev *Event, resolved
 // entries is rare and intentional — we'd rather reject a legitimate edge case
 // than allow a compromised owner to pivot into the internal network.
 var allowedSlackHosts = map[string]struct{}{
-	"hooks.slack.com":      {},
-	"slack.com":            {}, // for legacy / non-incoming-webhook integrations
+	"hooks.slack.com": {},
+	"slack.com":       {}, // for legacy / non-incoming-webhook integrations
 }
 
 // isValidSlackWebhook validates a webhook URL for the alerts SSRF guard.

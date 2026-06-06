@@ -173,7 +173,7 @@ WHERE org_id = {org_id:String}
 // quotedINList builds a comma-joined `'val1','val2',...` list safe to splice
 // into a ClickHouse IN clause.
 //
-// SECURITY: ClickHouse string literals accept BOTH `''` AND `\'` as escapes
+// SECURITY: ClickHouse string literals accept BOTH `”` AND `\'` as escapes
 // for a single quote. If we only doubled `'`, a value containing a trailing
 // `\` would let an attacker break out of the string literal:
 //
@@ -182,7 +182,7 @@ WHERE org_id = {org_id:String}
 //	correct: 'x\\','BREAKOUT'         // CH parses as one literal "x\\','BREAKOUT" — wait, still need...
 //
 // We must double `\` FIRST, then double `'`. The order matters: doubling `'`
-// first leaves any leading backslashes intact, and CH then interprets `\''`
+// first leaves any leading backslashes intact, and CH then interprets `\”`
 // as `\'` + `'` — closing the string.
 //
 // The matching test in graph_expand_test.go exercises both escapes.

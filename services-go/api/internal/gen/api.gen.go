@@ -167,10 +167,9 @@ type Trace struct {
 	// otherwise-generated struct because regenerating api.gen.go from
 	// the current oapi-codegen would restructure every endpoint's error
 	// responses (the on-disk artifact is from an older codegen version).
-	// Round-2 review caught this: the schema declares these fields, the
-	// dashboard reads them, but Go's traceToGen silently dropped them —
-	// the cost-breakdown tooltips and prompt_version pill never got data.
-	// Keep these in sync with schemas/api/v1.yaml's Trace schema.
+	// Without these fields here, traceToGen silently drops them — the
+	// cost-breakdown tooltips and prompt_version pill stay empty.
+	// Keep in sync with schemas/api/v1.yaml's Trace schema.
 	InputCostUsd  *float64 `json:"input_cost_usd,omitempty"`
 	OutputCostUsd *float64 `json:"output_cost_usd,omitempty"`
 	PromptVersion *string  `json:"prompt_version,omitempty"`
@@ -190,10 +189,10 @@ type Trace struct {
 	CacheReadCostUsd *float64 `json:"cache_read_cost_usd,omitempty"`
 	CostSource       *string  `json:"cost_source,omitempty"`
 	PricingVersion   *string  `json:"pricing_version,omitempty"`
-	Environment   string   `json:"environment"`
-	ErrorMessage  *string  `json:"error_message,omitempty"`
-	Extra         *string  `json:"extra,omitempty"`
-	FeatureName   *string  `json:"feature_name,omitempty"`
+	Environment      string   `json:"environment"`
+	ErrorMessage     *string  `json:"error_message,omitempty"`
+	Extra            *string  `json:"extra,omitempty"`
+	FeatureName      *string  `json:"feature_name,omitempty"`
 
 	// InputText Empty string for viewer role
 	InputText   *string `json:"input_text,omitempty"`
