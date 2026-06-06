@@ -11,6 +11,108 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## ScopeCall — [0.3.0] — 2026-06-06
+
+The cost-attribution release. Expand the wire format, ingest,
+processor, ClickHouse storage, Go API, and dashboard so users can
+answer "which workflow / agent / customer / retry was that dollar?"
+without proxying provider traffic.
+
+### Added — SDK (Python + TypeScript)
+
+- `sdk.workflow(name, ...)` / `sdk.agent(name, ...)` /
+  `sdk.step(name, ...)` — three nested context managers that emit
+  distinct container span kinds (`workflow` / `agent` / `step`) on
+  the synthetic span. Thin shims over `sdk.trace()`; nesting is
+  voluntary, not enforced.
+- `customer_id` kwarg on `trace()` / `workflow()` / `agent()` /
+  `step()` / `record_llm_call()`. Inherited from parent spans like
+  `user_id` / `session_id`. PII contract documented on the wire
+  types: must be a tenant / account slug or opaque ID, never raw
+  email / name / PII.
+- `attempt_number` + `retry_reason` kwargs on `record_llm_call()`.
+  `retry_reason` is a closed enum enforced at ingest:
+  `rate_limit | timeout | server_error | transient_network |
+  agent_decision | manual | unknown`.
+- `ScopeCallConfig.test = true` (or `SCOPECALL_TEST=1` env var) — tags
+  every event with `is_test=true` so non-production traffic (eval, CI,
+  replays) can be excluded from cost reports.
+
+### Added — wire format and ingest
+
+Eight new optional fields on `LLMEvent`: `customer_id`,
+`attempt_number`, `retry_reason`, `is_test`, `cache_read_cost_usd`,
+`cost_source`, `pricing_version`, plus expansion of the `kind` enum
+to include `agent` and `step`. Backward-compatible with v0.1 SDKs
+via serde defaults — missing fields take sensible zeros.
+
+### Added — processor
+
+- Server-derived `cost_source` (`server_computed` | `sdk_fallback` |
+  `unknown_model` | `container`) and `pricing_version` (the
+  YYYY-MM-DD `_meta.last_verified` from `schemas/pricing/pricing.json`).
+  Container spans (workflow / agent / step) are zeroed by `reprice()`
+  so SDK-supplied cost on container kinds can't poison analytics.
+- `cache_read_cost_usd` derived per-model when the pricing table
+  carries a cache_read rate.
+
+### Added — storage
+
+- ClickHouse migrations `006_customer_id.sql` /
+  `007_retry_and_test_flag.sql` / `008_cost_metadata.sql` splice the
+  new columns into `llm_calls`. All idempotent via the migration
+  runner's applied-migration tracker.
+
+### Added — Go API
+
+Five new hand-wired endpoints, all scoped by JWT `claims.OrgID` and
+cached through the Redis cache middleware:
+
+- `GET /api/v1/workflow-cost-tree` — workflow rollup + prior-period
+  delta for the Overview treemap.
+- `GET /api/v1/workflow-detail` — one-shot summary + agent / step /
+  customer / model / cost_source breakdowns for the workflow detail
+  page. Agent + step attribution via 2-hop `parent_span_id` join.
+- `GET /api/v1/customer-profitability` — per-customer rollup + a
+  separate totals query so the "Unattributed" tile is computed
+  against the grand total (not the truncated LIMIT'd row sum).
+- `GET /api/v1/waste-inbox` — deterministic-rule scan (retry
+  burners, model misuse, high-error workflows) ranked by potential
+  savings descending.
+- `GET /api/v1/cost-confidence` — `cost_source` shares + punch list
+  of unknown models pointing at `schemas/pricing/pricing.json`.
+
+Plus a `customer_id` filter on `GET /api/v1/traces` (mirroring the
+existing `user_id` / `feature_name` / `prompt_version` pattern).
+
+### Added — dashboard
+
+- **Overview**: Workflow Treemap (hand-rolled SVG, tile area =
+  current cost, color = delta vs prior period), Waste Inbox card
+  (deterministic findings with $-impact + drill-in), Cost Confidence
+  card (stacked bar + unknown-model punch list).
+- **Workflow detail page** (`/dashboard/workflows/[name]`) — agent /
+  step / customer / model breakdowns, retry-cost and test-traffic
+  callouts, embedded cost-source strip.
+- **Customers page** (`/dashboard/customers`) — ranked per-customer
+  rollup with attribution-coverage banner (< 50% triggers an SDK-
+  wiring nudge) and a retry-offender banner.
+- **Traces**: `customer_id` filter chip (chip-only pattern — no
+  dropdown, since customer cardinality scales with tenant count).
+
+### Notes
+
+- LIMIT values on the new endpoints are passed as parameterized CH
+  query parameters (`{lim:UInt32}`) rather than spliced via
+  `fmt.Sprintf`. Handlers clamp limits upstream; parameter binding
+  keeps the SQL safe under future refactors.
+- The Waste Inbox total-savings figure is labeled "up to $X" — a
+  workflow that appears under multiple rules (e.g. retry + error)
+  can be counted under each, so the headline is an upper bound by
+  design.
+
+---
+
 ## TypeScript SDK — [0.1.2] — 2026-06-04
 
 ### Changed
@@ -47,11 +149,10 @@ changes — see the migration note at the bottom.
   handles Anthropic's stream-event types (`message_start` /
   `content_block_delta` / `message_delta`).
 - Workflow-span emission — `sdk.trace(name)` blocks emit a synthetic
-  `kind='workflow'` event on exit, matching the TS SDK's Round-3 P0
-  contract. Children inside the block reference the workflow's
-  `span_id` as their `parent_span_id`.
-- `sdk.workflow(name)` alias of `sdk.trace(name)` (matches the
-  reviewer's example shape).
+  `kind='workflow'` event on exit, matching the TS SDK contract.
+  Children inside the block reference the workflow's `span_id` as
+  their `parent_span_id`.
+- `sdk.workflow(name)` alias of `sdk.trace(name)`.
 - `sdk.span(name)` — **experimental, do not use in new code.** Chains
   `parent_span_id` without emitting a row, which orphans children in
   the dashboard's trace tree. Use nested `sdk.trace(name)` blocks

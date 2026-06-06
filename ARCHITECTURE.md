@@ -51,14 +51,19 @@ ClickHouse or Redpanda directly — every read goes through the Go API.
 
 ---
 
-## Surfaces shipped in v0.1.1
+## Surfaces shipped in v0.3.0
 
 | Surface | Status |
 |---|---|
 | TypeScript SDK — OpenAI `chat.completions.create` (streaming + non-streaming) | ✅ |
 | TypeScript SDK — Anthropic `messages.create` (streaming + non-streaming) | ✅ |
 | TypeScript SDK — Vercel AI SDK (`generateText` / `streamText` / `generateObject` / `streamObject`) | ✅ |
-| Workflow spans — `sdk.trace()` blocks persisted as their own ClickHouse rows | ✅ |
+| Python SDK at TypeScript parity (`scopecall-py`) | ✅ |
+| `sdk.workflow()` / `sdk.agent()` / `sdk.step()` cost-attribution hierarchy (Python + TS) | ✅ |
+| Persisted container spans — `workflow` / `agent` / `step` rows with zeroed cost (`kind`-aware analytics) | ✅ |
+| `customer_id` B2B tenant attribution + retry attribution (`attempt_number`, `retry_reason`) + `is_test` traffic flag | ✅ |
+| Server-derived cost metadata (`cost_source`, `pricing_version`) — every row carries a trust signal | ✅ |
+| Dashboard: Workflow Treemap, workflow detail, Customers page, Waste Inbox, Cost Confidence card | ✅ |
 | Prompt version tagging — surfaces in the Prompts page | ✅ |
 | Server-authoritative pricing — processor recomputes cost from bundled pricing table | ✅ |
 | Self-hosted Docker Compose stack (Rust ingest, Rust processor, Go API, Next.js dashboard, ClickHouse, Postgres, Redpanda, Redis) | ✅ |
@@ -67,17 +72,12 @@ ClickHouse or Redpanda directly — every read goes through the Go API.
 | Alerts — cost-spike / error-rate / p99-latency rules, Slack channel | ✅ |
 | Idempotent ClickHouse migration runner with applied-migration tracker | ✅ |
 | Durable processor Kafka offset across restarts | ✅ |
-
-| Surface | Status |
-|---|---|
 | Manual rollup backfill script for upgrade installs ([`scripts/backfill-llm-metrics-hourly.sh`](scripts/backfill-llm-metrics-hourly.sh)) | ✅ |
-| Gemini SDK support | 🔜 v0.1.2 |
-| Productized rollup backfill UX (one-click from the dashboard) | 🔜 v0.1.2 |
-| LangChain integration | 🔜 v0.2.x |
-| OpenTelemetry GenAI bridge | 🔜 v0.2.x |
-| LiteLLM bridge | 🔜 v0.2.x |
-| Python SDK at TypeScript parity (`scopecall-py@0.2.0`) | ✅ |
-| Native LangChain / LlamaIndex framework bridges (Python + TS) | 🔜 v0.3.0 |
+| Gemini SDK support | 🔜 v0.3.1 |
+| Productized rollup backfill UX (one-click from the dashboard) | 🔜 v0.3.1 |
+| OpenTelemetry GenAI bridge | 🔜 v0.4.x |
+| LiteLLM bridge | 🔜 v0.4.x |
+| Native LangChain / LlamaIndex framework bridges (Python + TS) | 🔜 v0.5.0 |
 | Cost intelligence (forecasting, anomaly detection, model right-sizing) | 🔜 |
 | Budget enforcement (hard caps, smart model fallback) | 🔜 |
 | Agent execution debugger | 🔜 |
@@ -117,8 +117,8 @@ in a separate layer.
 
 | Table | Engine | What's in it |
 |---|---|---|
-| `llm_calls` | `ReplacingMergeTree` | Source of truth. One row per LLM call (`kind='llm'`) + one synthetic workflow row per `sdk.trace()` block (`kind='workflow'`). Replacing key is `(org_id, timestamp, span_id)` so at-least-once delivery dedupes at merge time. |
-| `llm_metrics_hourly` | `AggregatingMergeTree` | Pre-aggregated hourly rollup, populated by the `llm_calls_to_metrics_mv` materialized view. Filtered to `kind='llm'` so workflow rows don't pollute call counts / latency / cost aggregates. |
+| `llm_calls` | `ReplacingMergeTree` | Source of truth. One row per LLM call (`kind='llm'`) plus synthetic container rows from `sdk.workflow()` / `sdk.agent()` / `sdk.step()` blocks (`kind='workflow' \| 'agent' \| 'step'`). Container rows carry zero cost — the processor's `reprice()` zeros them so SDK-supplied numbers on container kinds can't poison aggregates. Replacing key is `(org_id, timestamp, span_id)` so at-least-once delivery dedupes at merge time. v0.3 columns: `customer_id`, `attempt_number`, `retry_reason`, `is_test`, `cache_read_cost_usd`, `cost_source`, `pricing_version`. |
+| `llm_metrics_hourly` | `AggregatingMergeTree` | Pre-aggregated hourly rollup, populated by the `llm_calls_to_metrics_mv` materialized view. Filtered to `kind='llm'` so container rows don't pollute call counts / latency / cost aggregates. |
 | `_scopecall_migrations` | `ReplacingMergeTree` | Self-tracking applied-migration list. Lets the migration runner skip already-applied SQL on every compose restart. |
 
 Postgres holds the small, write-shaped state: `orgs`, `users` (Auth.js),

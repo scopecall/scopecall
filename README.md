@@ -25,29 +25,62 @@ Licensed under [Apache 2.0](LICENSE). Free for any use — self-hosted, commerci
 
 ---
 
-## What ships in v0.1.1
+## What ships in v0.3.0
 
-- TypeScript SDK (`@scopecall/scopecall-js`) with OpenAI (`chat.completions.create`),
-  Anthropic (`messages.create`), and Vercel AI SDK (`generateText` / `streamText` /
-  `generateObject` / `streamObject`) instrumentation — streaming + non-streaming.
-- Python SDK (`scopecall-py`) with OpenAI + Anthropic sync/async/streaming
-  instrumentation, workflow spans (`sdk.trace()`), `contextvars`-based trace
-  propagation across `await`, PII redaction, and a manual `record_llm_call(...)`
-  escape hatch for LangChain / LlamaIndex / custom wrappers.
-- Persisted workflow spans (`sdk.trace()`) so the trace tree + Flow Map
-  show real parent → child structure, not flat call lists.
-- Server-authoritative pricing — the Rust processor recomputes `cost_usd`
-  from a bundled pricing table; SDK-supplied cost is advisory.
-- Per-prompt-version analytics (`/dashboard/prompts`).
-- Self-hosted stack via Docker Compose (Rust ingest, Go API, Next.js
-  dashboard, ClickHouse, Postgres, Redpanda, Redis).
-- Email + password auth (Auth.js); dead-letter queue with retry.
+The cost-attribution release — answers "which workflow, which agent,
+which customer, which retry was that dollar?" without proxying provider
+traffic.
 
-**Not yet in v0.1.1:** Gemini support (v0.1.2), OpenTelemetry bridge
-(v0.2.x), native LangChain / LlamaIndex integrations (v0.3.0; the
-manual `record_llm_call(...)` API works today as a bridge), budget
-enforcement / model fallback (v0.4.0), agent execution debugger
-(v0.5.0). See [roadmap](#roadmap) below.
+**Capture path (SDK + ingest + processor):**
+
+- `sdk.workflow(name)` / `sdk.agent(name)` / `sdk.step(name)` —
+  three nested context managers (Python + TypeScript) that emit
+  distinct container span kinds. Nesting is voluntary, not enforced;
+  the dashboard rolls up cost from LLM calls to whichever ancestor
+  you wrap.
+- `customer_id` kwarg on `trace()` / `workflow()` / `agent()` /
+  `step()` / `record_llm_call()` — B2B tenant attribution distinct
+  from `user_id`. Inherits from parent spans.
+- `attempt_number` + `retry_reason` (closed enum) on
+  `record_llm_call()` for retry attribution.
+- `ScopeCallConfig.test = true` (or `SCOPECALL_TEST=1`) tags every
+  event with `is_test=true` so eval / CI / replay traffic stays out
+  of production cost reports.
+- `cost_source` (`server_computed` | `sdk_fallback` | `unknown_model`
+  | `container`) + `pricing_version` (YYYY-MM-DD) — server-derived
+  trust metadata on every row. Surfaces in the Cost Confidence card
+  so the dashboard tells you what fraction of its dollar number is
+  verified vs. fiction.
+
+**Dashboard (built on the capture path):**
+
+- **Workflow Treemap** on Overview — tile area is cost, color is
+  delta vs the prior window. One click to drill into a workflow.
+- **Workflow detail page** — agent / step / customer / model
+  breakdowns plus retry-cost and test-traffic callouts. Two-hop
+  parent_span_id join attributes each LLM call to its enclosing
+  step → agent.
+- **Customers page** — per-customer rollup ranked by cost, with an
+  attribution-coverage banner when `customer_id` isn't wired through
+  and a retry-offender banner for the worst customer.
+- **Waste Inbox** on Overview — deterministic-rule findings ranked
+  by dollar impact (retry burners, model misuse, high-error
+  workflows). Each item is a "save up to $X" line with a one-click
+  drill to the offending traces.
+- **Cost Confidence** card on Overview — stacked bar of `cost_source`
+  shares + punch list of unknown models pointing at
+  `schemas/pricing/pricing.json`.
+
+**Plus everything from v0.1.1** — OpenAI / Anthropic / Vercel AI SDK
+instrumentation (TS + Python), prompt-version analytics, server-
+authoritative pricing, self-hosted Docker Compose stack, Auth.js, API
+key management, alerts, durable processor offsets.
+
+**Not yet in v0.3:** Gemini support (v0.3.1), OpenTelemetry GenAI
+bridge (v0.4.x), native LangChain / LlamaIndex integrations (v0.5.0;
+the manual `record_llm_call(...)` API works today as a bridge),
+budget enforcement / model fallback (v0.6.0), agent execution
+debugger (v0.7.0). See [roadmap](#roadmap) below.
 
 ---
 
@@ -87,8 +120,9 @@ can't show it to you again.
 ### 3. Install the SDK + instrument your app
 
 Pick your stack. Both SDKs ship the same wire format and the same dashboard
-features — workflow spans, streaming + TTFT capture, server-recomputed cost,
-prompt versioning, PII redaction.
+features — workflow / agent / step cost-attribution hierarchy, `customer_id`
+B2B tenant tagging, retry attribution, streaming + TTFT capture,
+server-recomputed cost, prompt versioning, PII redaction.
 
 #### TypeScript
 
@@ -113,10 +147,26 @@ const sdk = init({
 const openai = new OpenAI();
 sdk.instrument(openai);
 
-const response = await openai.chat.completions.create({
-  model: "gpt-4o",
-  messages: [{ role: "user", content: "Hello" }],
-});
+// sdk.workflow() wraps a logical workflow. Cost from every LLM call
+// inside it rolls up to this workflow on the dashboard's Workflow
+// Treemap. `customerId` (v0.3) attributes the spend to a specific
+// B2B tenant — surfaces on the /dashboard/customers page.
+await sdk.workflow(
+  "refund-bot",
+  async () => {
+    // Nested sdk.agent() / sdk.step() are optional — use them when you
+    // want per-agent / per-step cost breakdowns in the workflow detail page.
+    await sdk.agent("intent_router", async () => {
+      await sdk.step("classify_intent", async () => {
+        await openai.chat.completions.create({
+          model: "gpt-4o-mini",
+          messages: [{ role: "user", content: "Hello" }],
+        });
+      });
+    });
+  },
+  { customerId: "customer_acme" },
+);
 ```
 
 #### Python
@@ -141,13 +191,20 @@ sdk = scopecall.init(
 # Auto-detects sync vs async — pass AsyncOpenAI() for async.
 client = sdk.instrument(OpenAI())
 
-# sdk.trace() is the unit of workflow observability — every LLM call
-# inside this block is chained as a child in the dashboard's trace tree.
-with sdk.trace("hello-world", feature_name="demo"):
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": "Hello"}],
-    )
+# sdk.workflow() wraps a logical workflow. Cost from every LLM call
+# inside it rolls up to this workflow on the dashboard's Workflow
+# Treemap. `customer_id` (v0.3) attributes the spend to a specific
+# B2B tenant — surfaces on the /dashboard/customers page.
+with sdk.workflow("refund-bot", customer_id="customer_acme"):
+    # Nested sdk.agent() / sdk.step() are optional — use them when
+    # you want per-agent / per-step cost breakdowns in the workflow
+    # detail page.
+    with sdk.agent("intent_router"):
+        with sdk.step("classify_intent"):
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": "Hello"}],
+            )
 
 sdk.flush()   # ensure the event leaves the process before exit
 ```
@@ -189,12 +246,13 @@ all reads go through the Go API.
 | Version | What ships |
 |---------|-----------|
 | **v0.1.0** | OpenAI tracing (TypeScript SDK), self-hosted stack, traces view, cost display |
-| **v0.1.1** *(current)* | Anthropic + Vercel AI SDK support; workflow spans; per-prompt-version analytics; API key management; durable processor offsets. **Python SDK** (`scopecall-py@0.2.0`) ships alongside with OpenAI + Anthropic sync/async/streaming instrumentation and a manual `record_llm_call(...)` API for LangChain / LlamaIndex / custom wrappers. |
-| **v0.1.2** | Gemini SDK support; productized rollup backfill UX (the manual repair script `scripts/backfill-llm-metrics-hourly.sh` ships in v0.1.1) |
-| **v0.2.x** | OpenTelemetry GenAI bridge; configurable alert channels |
-| **v0.3.0** | Native LangChain + LlamaIndex framework integrations (Python + TypeScript) |
-| **v0.4.0** | Budget enforcement — alert, soft-block, model fallback |
-| **v0.5.0** | Agent execution debugger — visual step tree for multi-step agents |
+| **v0.1.1** | Anthropic + Vercel AI SDK support; workflow spans; per-prompt-version analytics; API key management; durable processor offsets. **Python SDK** (`scopecall-py@0.2.0`) ships alongside with OpenAI + Anthropic sync/async/streaming instrumentation and a manual `record_llm_call(...)` API for LangChain / LlamaIndex / custom wrappers. |
+| **v0.3.0** *(current)* | Cost attribution — `sdk.workflow()` / `sdk.agent()` / `sdk.step()` hierarchy, `customer_id` B2B tenant tag, retry attribution (`attempt_number` + `retry_reason`), `is_test` flag, server-derived `cost_source` + `pricing_version`. Dashboard: Workflow Treemap + workflow detail page + Customers page + Waste Inbox + Cost Confidence card. |
+| **v0.3.1** | Gemini SDK support; productized rollup backfill UX (the manual repair script `scripts/backfill-llm-metrics-hourly.sh` ships today) |
+| **v0.4.x** | OpenTelemetry GenAI bridge; configurable alert channels |
+| **v0.5.0** | Native LangChain + LlamaIndex framework integrations (Python + TypeScript) |
+| **v0.6.0** | Budget enforcement — alert, soft-block, model fallback |
+| **v0.7.0** | Agent execution debugger — visual step tree for multi-step agents |
 
 ---
 
