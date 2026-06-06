@@ -113,6 +113,58 @@ existing `user_id` / `feature_name` / `prompt_version` pattern).
 
 ---
 
+## Python SDK — [0.3.0] — 2026-06-06
+
+Cost-attribution release for `scopecall-py`. Adds the workflow → agent
+→ step hierarchy, B2B customer attribution, retry attribution, and a
+test-traffic flag. Wire-compatible with the platform `v0.3.0` release.
+
+### Added
+
+- `sdk.workflow(name, ...)` / `sdk.agent(name, ...)` /
+  `sdk.step(name, ...)` — three nested context managers over
+  `sdk.trace()` that emit distinct container span kinds on the
+  synthetic span (`kind='workflow'` / `'agent'` / `'step'`
+  respectively). Nesting is voluntary, not enforced; the dashboard
+  rolls up cost from LLM calls to whichever ancestor you wrap.
+- `customer_id` kwarg on `trace()` / `workflow()` / `agent()` /
+  `step()` / `record_llm_call()` — B2B tenant attribution distinct
+  from `user_id`. Inherited from parent spans like `user_id` /
+  `session_id`. PII contract: must be a tenant / account slug or
+  opaque ID, never raw email / name / PII.
+- `attempt_number` + `retry_reason` kwargs on
+  `record_llm_call()`. `retry_reason` is a closed enum enforced at
+  ingest: `rate_limit | timeout | server_error |
+  transient_network | agent_decision | manual | unknown`.
+- `ScopeCallConfig.test = True` (or `SCOPECALL_TEST=1` env var) —
+  tags every event with `is_test=true` so non-production traffic
+  (eval, CI, replays) can be excluded from production cost
+  reports.
+- `SpanKind` Literal type re-exported from `scopecall._context`
+  for callers that want narrowed type checking on the `kind`
+  parameter.
+
+### Changed
+
+- `TraceContext.kind` and the `kind` parameters on `sdk.trace()` /
+  `sdk.span()` are now typed as `Literal["llm", "workflow",
+  "agent", "step"]` (was `str`). Mirrors the wire `LLMEvent.kind`'s
+  existing Literal type and matches the Rust ingest's closed-enum
+  validation.
+
+### Notes
+
+- README updated with a new "Cost attribution hierarchy" section
+  showing the nested workflow / agent / step pattern. The
+  quickstart example now uses `sdk.workflow(name, customer_id=...)`
+  in place of `sdk.trace(name, ...)`. `sdk.trace()` remains
+  supported as a backward-compatible alias.
+- FastAPI example (`sdks/python/examples/fastapi/app.py`) updated
+  to use `sdk.workflow()` and to thread `customer_id` from the
+  request model.
+
+---
+
 ## TypeScript SDK — [0.1.2] — 2026-06-04
 
 ### Changed
