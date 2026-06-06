@@ -31,6 +31,12 @@ from __future__ import annotations
 import uuid
 from contextvars import ContextVar
 from dataclasses import dataclass, field
+from typing import Literal
+
+# Closed enum of valid span kinds — mirrors the Rust ingest's `kind`
+# validation and the wire LLMEvent's Literal type. Re-exported so callers
+# of sdk.trace(kind=...) get the same narrowed type checked by mypy.
+SpanKind = Literal["llm", "workflow", "agent", "step"]
 
 
 @dataclass
@@ -86,7 +92,7 @@ class TraceContext:
     # set this explicitly so the dashboard can group cost by level.
     # The Rust ingest enforces the closed enum {llm, workflow, agent, step}
     # — see services-rust/common/src/event.rs.
-    kind: str = "workflow"
+    kind: SpanKind = "workflow"
 
 
 # Module-level ContextVar. The reset-token pattern below is what

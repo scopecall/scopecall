@@ -160,13 +160,11 @@ impl Enricher {
             // state — mainly the path on the day a provider ships a new
             // model. Operators get the data back the moment they add
             // the model to pricing.json and re-process.
-            event.event.cost_source = Some(
-                if event.event.cost_usd > 0.0 {
-                    "sdk_fallback".to_owned()
-                } else {
-                    "unknown_model".to_owned()
-                },
-            );
+            event.event.cost_source = Some(if event.event.cost_usd > 0.0 {
+                "sdk_fallback".to_owned()
+            } else {
+                "unknown_model".to_owned()
+            });
         }
     }
 }
@@ -292,12 +290,29 @@ mod tests {
             assert_eq!(ev.event.kind, kind, "kind preserved");
             assert_eq!(ev.event.model, "", "model zeroed for kind={kind}");
             assert_eq!(ev.event.provider, "", "provider zeroed for kind={kind}");
-            assert_eq!(ev.event.input_tokens, 0, "input_tokens zeroed for kind={kind}");
-            assert_eq!(ev.event.output_tokens, 0, "output_tokens zeroed for kind={kind}");
+            assert_eq!(
+                ev.event.input_tokens, 0,
+                "input_tokens zeroed for kind={kind}"
+            );
+            assert_eq!(
+                ev.event.output_tokens, 0,
+                "output_tokens zeroed for kind={kind}"
+            );
             assert_eq!(ev.event.cost_usd, 0.0, "cost_usd zeroed for kind={kind}");
-            assert_eq!(ev.event.input_cost_usd, Some(0.0), "input_cost zeroed for kind={kind}");
-            assert_eq!(ev.event.output_cost_usd, Some(0.0), "output_cost zeroed for kind={kind}");
-            assert_eq!(ev.event.cache_read_tokens, None, "cache_read_tokens zeroed for kind={kind}");
+            assert_eq!(
+                ev.event.input_cost_usd,
+                Some(0.0),
+                "input_cost zeroed for kind={kind}"
+            );
+            assert_eq!(
+                ev.event.output_cost_usd,
+                Some(0.0),
+                "output_cost zeroed for kind={kind}"
+            );
+            assert_eq!(
+                ev.event.cache_read_tokens, None,
+                "cache_read_tokens zeroed for kind={kind}"
+            );
             assert_eq!(
                 ev.event.cost_source.as_deref(),
                 Some("container"),

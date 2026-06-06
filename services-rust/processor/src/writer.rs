@@ -111,7 +111,10 @@ impl From<EnrichedEvent> for LlmCallRow {
             retry_reason: e.event.retry_reason,
             is_test: e.event.is_test,
             cache_read_cost_usd: e.event.cache_read_cost_usd.unwrap_or(0.0),
-            cost_source: e.event.cost_source.unwrap_or_else(|| "unknown_model".to_owned()),
+            cost_source: e
+                .event
+                .cost_source
+                .unwrap_or_else(|| "unknown_model".to_owned()),
             pricing_version: e.event.pricing_version,
             environment: e.event.environment,
             sdk_version: e.event.sdk_version,

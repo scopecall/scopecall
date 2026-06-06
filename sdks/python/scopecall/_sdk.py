@@ -84,7 +84,7 @@ class ScopeCallSDK:
         session_id: str | None = None,
         customer_id: str | None = None,
         prompt_version: str | None = None,
-        kind: str = "workflow",
+        kind: _context.SpanKind = "workflow",
     ) -> Generator[_context.TraceContext, None, None]:
         """Run a block as a named workflow trace.
 
@@ -347,7 +347,7 @@ class ScopeCallSDK:
         self,
         name: str,
         *,
-        kind: str | None = None,
+        kind: _context.SpanKind | None = None,
     ) -> Generator[_context.TraceContext, None, None]:
         """⚠️  EXPERIMENTAL — do not use in new code.
 

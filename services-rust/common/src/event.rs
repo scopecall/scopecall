@@ -240,13 +240,8 @@ impl LlmEvent {
         // categories without an "(unknown values…)" bucket leaking in.
         if let Some(reason) = &self.retry_reason {
             match reason.as_str() {
-                "rate_limit"
-                | "timeout"
-                | "server_error"
-                | "transient_network"
-                | "agent_decision"
-                | "manual"
-                | "unknown" => {}
+                "rate_limit" | "timeout" | "server_error" | "transient_network"
+                | "agent_decision" | "manual" | "unknown" => {}
                 other => {
                     return Err(ValidationError(format!(
                         "retry_reason must be one of \
