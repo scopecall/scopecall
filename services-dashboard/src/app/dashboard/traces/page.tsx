@@ -128,6 +128,19 @@ function TracesView() {
   const [customerId, setCustomerId] = useState<string | undefined>(
     () => searchParams.get("customer_id") ?? undefined,
   );
+  // v0.3 cost-attribution-hierarchy filters. Chip-only pattern: these
+  // arrive via drill-ins from the Workflow Treemap, Waste Inbox,
+  // workflow detail page's by-agent panel. They map to trace_id
+  // IN-subqueries server-side, NOT feature_name equality — see use-traces.ts.
+  const [workflowFilter, setWorkflowFilter] = useState<string | undefined>(
+    () => searchParams.get("workflow") ?? undefined,
+  );
+  const [agentFilter, setAgentFilter] = useState<string | undefined>(
+    () => searchParams.get("agent") ?? undefined,
+  );
+  const [stepFilter, setStepFilter] = useState<string | undefined>(
+    () => searchParams.get("step") ?? undefined,
+  );
   // Local input state for the user_id text field — committed on Enter/blur so we
   // don't refetch on every keystroke.
   const [userInput, setUserInput] = useState<string>(userId ?? "");
@@ -184,6 +197,9 @@ function TracesView() {
       environment,
       promptVersion,
       customerId,
+      workflow: workflowFilter,
+      agent: agentFilter,
+      step: stepFilter,
       q: searchCommitted,
       // Polling only kicks in when both: user opted in AND the range is "live".
       // No cursor when live — always show the latest page.
@@ -196,7 +212,7 @@ function TracesView() {
   useApiError(query.error, query.refetch);
 
   // Reset selection when page/filter/range/search changes
-  useEffect(() => { setSelectedIdx(-1); }, [cursor, status, range, model, featureName, provider, environment, userId, promptVersion, customerId, searchCommitted]);
+  useEffect(() => { setSelectedIdx(-1); }, [cursor, status, range, model, featureName, provider, environment, userId, promptVersion, customerId, workflowFilter, agentFilter, stepFilter, searchCommitted]);
 
   // Sync filter state to URL so any view is shareable / bookmarkable.
   // router.replace (not push) — filter tweaks shouldn't pile up in history.
@@ -211,6 +227,9 @@ function TracesView() {
     if (userId)          sp.set("user_id", userId);
     if (promptVersion)   sp.set("prompt_version", promptVersion);
     if (customerId)      sp.set("customer_id", customerId);
+    if (workflowFilter)  sp.set("workflow", workflowFilter);
+    if (agentFilter)     sp.set("agent", agentFilter);
+    if (stepFilter)      sp.set("step", stepFilter);
     if (searchCommitted) sp.set("q", searchCommitted);
     // Persist range too so the URL fully reproduces the view. Drill-in
     // callers pass ISO 8601 — we round-trip the same format. We always
@@ -224,7 +243,7 @@ function TracesView() {
     if (next !== current) {
       router.replace(next ? `?${next}` : "/dashboard/traces", { scroll: false });
     }
-  }, [status, model, provider, featureName, environment, userId, promptVersion, customerId, searchCommitted, range, router, searchParams]);
+  }, [status, model, provider, featureName, environment, userId, promptVersion, customerId, workflowFilter, agentFilter, stepFilter, searchCommitted, range, router, searchParams]);
 
   // "/" focuses the search input (skipping when already in an input/textarea).
   useEffect(() => {
@@ -324,10 +343,10 @@ function TracesView() {
     setCursor(undefined);
   }
 
-  const anyFilterActive = !!(status || model || featureName || provider || environment || userId || promptVersion || customerId || searchCommitted);
+  const anyFilterActive = !!(status || model || featureName || provider || environment || userId || promptVersion || customerId || workflowFilter || agentFilter || stepFilter || searchCommitted);
   // Count for the mobile "Filters" button badge. Excludes search since search
   // has its own always-visible input above the toolbar.
-  const activeFilterCount = [status, model, featureName, provider, environment, userId, promptVersion, customerId]
+  const activeFilterCount = [status, model, featureName, provider, environment, userId, promptVersion, customerId, workflowFilter, agentFilter, stepFilter]
     .filter(Boolean).length;
 
   function clearAllFilters() {
@@ -340,6 +359,9 @@ function TracesView() {
     setUserInput("");
     setPromptVersion(undefined);
     setCustomerId(undefined);
+    setWorkflowFilter(undefined);
+    setAgentFilter(undefined);
+    setStepFilter(undefined);
     setSearchInput("");
     setSearchCommitted(undefined);
     setCursorStack([]);
@@ -487,6 +509,53 @@ function TracesView() {
           </button>
         )}
       </div>
+
+      {/* v0.3 hierarchy chips — workflow / agent / step. Same chip-only
+          pattern as customer_id and prompt_version: arrived here via
+          drill-in from the Workflow Treemap, Waste Inbox, or workflow
+          detail page. Server-side these resolve to trace_id IN-subqueries
+          against the matching kind='workflow' / 'agent' / 'step' spans,
+          so the displayed traces are everything *inside* the named
+          unit — not just rows whose feature_name happens to equal it. */}
+      {workflowFilter && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-md border border-brand/30 bg-brand/10 text-xs">
+          <span className="text-muted-foreground">Workflow:</span>
+          <span className="font-mono text-foreground">{workflowFilter}</span>
+          <button
+            onClick={() => setWorkflowFilter(undefined)}
+            className="ml-auto text-muted-foreground hover:text-foreground underline underline-offset-2"
+            aria-label="Clear workflow filter"
+          >
+            Clear
+          </button>
+        </div>
+      )}
+      {agentFilter && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-md border border-brand/30 bg-brand/10 text-xs">
+          <span className="text-muted-foreground">Agent:</span>
+          <span className="font-mono text-foreground">{agentFilter}</span>
+          <button
+            onClick={() => setAgentFilter(undefined)}
+            className="ml-auto text-muted-foreground hover:text-foreground underline underline-offset-2"
+            aria-label="Clear agent filter"
+          >
+            Clear
+          </button>
+        </div>
+      )}
+      {stepFilter && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-md border border-brand/30 bg-brand/10 text-xs">
+          <span className="text-muted-foreground">Step:</span>
+          <span className="font-mono text-foreground">{stepFilter}</span>
+          <button
+            onClick={() => setStepFilter(undefined)}
+            className="ml-auto text-muted-foreground hover:text-foreground underline underline-offset-2"
+            aria-label="Clear step filter"
+          >
+            Clear
+          </button>
+        </div>
+      )}
 
       {/* Customer-id chip — same chip-only pattern as prompt_version (no
           dropdown because customer cardinality scales with tenant count).

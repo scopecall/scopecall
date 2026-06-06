@@ -19,16 +19,16 @@ import (
 const maxTracesLimit = 1000
 
 type TraceRow struct {
-	OrgID         string
-	TraceID       string
-	SpanID        string
-	ParentSpanID  *string
-	Timestamp     time.Time
-	Model         string
-	Provider      string
-	InputTokens   uint32
-	OutputTokens  uint32
-	CostUSD       float64
+	OrgID        string
+	TraceID      string
+	SpanID       string
+	ParentSpanID *string
+	Timestamp    time.Time
+	Model        string
+	Provider     string
+	InputTokens  uint32
+	OutputTokens uint32
+	CostUSD      float64
 	// Cost components — populated at ingest from per-model pricing so the
 	// dashboard can show a stored breakdown without recomputation.
 	InputCostUSD  float64
@@ -71,12 +71,12 @@ type ListTracesArgs struct {
 	IsOwner     bool
 	Cursor      string
 	Limit       int
-	Model         string
-	Status        string
-	Provider      string
-	FeatureName   string
-	UserID        string
-	Environment   string
+	Model       string
+	Status      string
+	Provider    string
+	FeatureName string
+	UserID      string
+	Environment string
 	// Prompt version filter — supports the same nullSentinel as other
 	// dimensions so the Prompts page's "(none)" row can drill into untagged
 	// calls.
@@ -84,7 +84,18 @@ type ListTracesArgs struct {
 	// v0.3 — B2B tenant filter. Drilled into from /dashboard/customers + the
 	// workflow detail by-customer panel. Supports nullSentinel to surface
 	// calls with no customer_id (the "Unattributed" tile on the customers page).
-	CustomerID    string
+	CustomerID string
+	// v0.3 — cost-attribution-hierarchy filters. These resolve to a
+	// trace_id IN-subquery against the kind='workflow' / 'agent' / 'step'
+	// rows respectively. They are the right way to scope traces to "all
+	// calls inside this workflow / agent / step" — NOT feature_name
+	// equality, which on LLM rows resolves to the step/call name (so
+	// feature_name='refund-bot' would match the workflow span but miss
+	// every LLM call inside it). Drilled into from the Waste Inbox,
+	// workflow-detail page, and the Workflow Treemap.
+	Workflow string // workflow feature_name on a kind='workflow' span
+	Agent    string // agent feature_name on a kind='agent' span
+	Step     string // step feature_name on a kind='step' span
 	// Free-text search: exact-match on ID columns, plus case-insensitive
 	// substring on input/output/error text. Text columns are excluded from
 	// the search when IsOwner is false — otherwise a viewer could deduce
@@ -192,6 +203,42 @@ func ListTraces(ctx context.Context, ch driver.Conn, args ListTracesArgs) (*List
 		}
 		conds = append(conds, fmt.Sprintf("%s = {%s:String}", f.col, f.name))
 		queryArgs = append(queryArgs, driver.NamedValue{Name: f.name, Value: f.val})
+	}
+
+	// v0.3 — workflow / agent / step hierarchy filters. Each resolves to a
+	// trace_id IN-subquery: "this span belongs to a trace whose
+	// kind='workflow'/'agent'/'step' row has feature_name = X". This is the
+	// correct way to scope to "all calls inside this workflow" — equality on
+	// the LLM row's own feature_name would only match LLM rows tagged with
+	// the workflow name (rare; usually feature_name on LLM rows is the
+	// step/call name).
+	//
+	// The subqueries are bounded by the same org_id + (prior-window-safe)
+	// time range as the outer query, so they stay cheap. We scope to
+	// `timestamp >= from - 1 day AND timestamp < to` so a workflow span
+	// emitted up to a day before the visible window still attributes its
+	// children — workflows can outlive the immediate range when users
+	// re-query an older slice.
+	hierarchyFilters := []struct {
+		val, kind, paramName string
+	}{
+		{args.Workflow, "workflow", "wf_name"},
+		{args.Agent, "agent", "ag_name"},
+		{args.Step, "step", "st_name"},
+	}
+	for _, hf := range hierarchyFilters {
+		if hf.val == "" {
+			continue
+		}
+		conds = append(conds, fmt.Sprintf(`trace_id IN (
+            SELECT trace_id FROM llm_calls
+            WHERE org_id = {org_id:String}
+              AND kind = '%s'
+              AND coalesce(nullIf(feature_name, ''), '') = {%s:String}
+              AND timestamp >= {from:DateTime('UTC')} - INTERVAL 1 DAY
+              AND timestamp <  {to:DateTime('UTC')}
+        )`, hf.kind, hf.paramName))
+		queryArgs = append(queryArgs, driver.NamedValue{Name: hf.paramName, Value: hf.val})
 	}
 
 	// Free-text search. ID columns match exactly; text columns use

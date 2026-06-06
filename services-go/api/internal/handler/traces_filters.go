@@ -26,6 +26,14 @@ const (
 	// from the workflow-detail page's by-customer breakdown. Distinct from
 	// user_id (the end-user of the customer's app).
 	keyCustomerID
+	// v0.3 — cost-attribution-hierarchy filters. These resolve to trace_id
+	// IN-subqueries against the kind='workflow'/'agent'/'step' rows. Used
+	// by Waste Inbox drill-ins, Workflow Treemap drill-ins, and the
+	// workflow detail page's by-agent / by-step click handlers. Distinct
+	// from feature_name — see ListTracesArgs doc-comments.
+	keyWorkflow
+	keyAgent
+	keyStep
 )
 
 // WithTraceFilters reads provider/user_id/environment/feature_name from the
@@ -54,6 +62,15 @@ func WithTraceFilters(r *http.Request) context.Context {
 	}
 	if v := q.Get("customer_id"); v != "" {
 		ctx = context.WithValue(ctx, keyCustomerID, v)
+	}
+	if v := q.Get("workflow"); v != "" {
+		ctx = context.WithValue(ctx, keyWorkflow, v)
+	}
+	if v := q.Get("agent"); v != "" {
+		ctx = context.WithValue(ctx, keyAgent, v)
+	}
+	if v := q.Get("step"); v != "" {
+		ctx = context.WithValue(ctx, keyStep, v)
 	}
 	return ctx
 }

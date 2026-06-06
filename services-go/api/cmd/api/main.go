@@ -157,39 +157,39 @@ func main() {
 	}
 
 	cacheTTLs := map[string]time.Duration{
-		"overview":        30 * time.Second,
-		"traces":          60 * time.Second,
-		"trace_detail":    5 * time.Minute,
-		"metrics_cost":    2 * time.Minute,
-		"metrics_latency": 2 * time.Minute,
-		"metrics_errors":  2 * time.Minute,
-		"alerts":          30 * time.Second,
-		"breakdown":         60 * time.Second,
-		"trace_tree":        5 * time.Minute,
-		"top_movers":        2 * time.Minute,
-		"errors_by_status":  60 * time.Second,
-		"sessions":          60 * time.Second,
-		"graph":             2 * time.Minute,
+		"overview":         30 * time.Second,
+		"traces":           60 * time.Second,
+		"trace_detail":     5 * time.Minute,
+		"metrics_cost":     2 * time.Minute,
+		"metrics_latency":  2 * time.Minute,
+		"metrics_errors":   2 * time.Minute,
+		"alerts":           30 * time.Second,
+		"breakdown":        60 * time.Second,
+		"trace_tree":       5 * time.Minute,
+		"top_movers":       2 * time.Minute,
+		"errors_by_status": 60 * time.Second,
+		"sessions":         60 * time.Second,
+		"graph":            2 * time.Minute,
 		// 20s — short enough that the "last call N sec ago" indicator stays
 		// honest while the user is watching for first-call-after-install.
-		"sdk_health":        20 * time.Second,
-		"regressions":       2 * time.Minute,
+		"sdk_health":  20 * time.Second,
+		"regressions": 2 * time.Minute,
 		// Prompts page is a per-version aggregate — same cadence as
 		// other breakdown-style endpoints. Tight enough for operators
 		// to see a new prompt version's metrics fill in quickly after
 		// deploy.
-		"prompts":           60 * time.Second,
+		"prompts": 60 * time.Second,
 		// Workflow treemap — workflow rollups for Overview. Same cadence as
 		// other rollup-style endpoints; the data underneath only refreshes
 		// once the processor commits a new ClickHouse batch.
-		"workflow_cost_tree":      60 * time.Second,
-		"workflow_detail":         60 * time.Second,
-		"customer_profitability":  60 * time.Second,
+		"workflow_cost_tree":     60 * time.Second,
+		"workflow_detail":        60 * time.Second,
+		"customer_profitability": 60 * time.Second,
 		// Waste Inbox runs 3 small CH queries — same cadence as the other
 		// rollup endpoints. Stale data here is harmless; the cost-of-waste
 		// changes on the hour, not the second.
-		"waste_inbox":             60 * time.Second,
-		"cost_confidence":         60 * time.Second,
+		"waste_inbox":     60 * time.Second,
+		"cost_confidence": 60 * time.Second,
 	}
 
 	// Per-org rate limit: 600 req/min per org_id. Sized for ~10-15 active

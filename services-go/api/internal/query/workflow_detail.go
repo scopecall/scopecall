@@ -36,12 +36,12 @@ type WorkflowSummary struct {
 // single response. Each breakdown is bounded (top 20) so the response stays
 // small.
 type WorkflowDetailResult struct {
-	Summary        WorkflowSummary
-	ByAgent        []WorkflowBreakdownRow
-	ByStep         []WorkflowBreakdownRow
-	ByCustomer     []WorkflowBreakdownRow
-	ByModel        []WorkflowBreakdownRow
-	CostSourceMix  []WorkflowBreakdownRow // server_computed vs sdk_fallback vs unknown_model — cost-confidence indicator
+	Summary       WorkflowSummary
+	ByAgent       []WorkflowBreakdownRow
+	ByStep        []WorkflowBreakdownRow
+	ByCustomer    []WorkflowBreakdownRow
+	ByModel       []WorkflowBreakdownRow
+	CostSourceMix []WorkflowBreakdownRow // server_computed vs sdk_fallback vs unknown_model — cost-confidence indicator
 }
 
 // WorkflowDetail returns a one-shot rollup for the workflow detail page.
@@ -183,16 +183,39 @@ llms AS (
       AND l.timestamp <  {to:DateTime('UTC')}
 )`
 
-	// ── 2. By agent — 2-hop: llm.parent → step.span_id, step.parent → agent.span_id ──
+	// ── 2. By agent — TWO valid structural paths from an LLM call up to the
+	//        enclosing agent, and we have to handle both:
+	//
+	//   (A) workflow → agent → step → llm   (the canonical 3-level shape)
+	//       resolved via llm.parent_span_id → step.span_id,
+	//                    step.parent_span_id → agent.span_id
+	//
+	//   (B) workflow → agent → llm          (no step wrapper; sdk.agent()
+	//                                        followed by a bare LLM call)
+	//       resolved via llm.parent_span_id → agent.span_id directly
+	//
+	//        Both are legitimate caller patterns. Falling back to (A) only
+	//        bucketed (B)-shaped calls into "(no agent)" — i.e. silently
+	//        misattributed any cost from agents whose work wasn't further
+	//        subdivided into steps.
+	//
+	//        We coalesce: prefer the step-mediated path (agent identity
+	//        through the canonical hierarchy), fall back to the direct
+	//        path. Identical agent rows are merged in the outer GROUP BY.
 	byAgentQ := breakdownPrefix + `
 SELECT
-    coalesce(a.agent_name, '')              AS key,
+    coalesce(
+        nullIf(a_via_step.agent_name, ''),
+        nullIf(a_direct.agent_name, ''),
+        ''
+    )                                       AS key,
     sum(l.cost_usd)                         AS cost,
     count()                                 AS calls,
     countIf(l.status = 'error')             AS errors
 FROM llms l
-LEFT JOIN steps s  ON l.parent_span_id = s.span_id
-LEFT JOIN agents a ON s.parent_span_id = a.span_id
+LEFT JOIN steps  s          ON l.parent_span_id = s.span_id
+LEFT JOIN agents a_via_step ON s.parent_span_id = a_via_step.span_id
+LEFT JOIN agents a_direct   ON l.parent_span_id = a_direct.span_id
 GROUP BY key
 ORDER BY cost DESC
 LIMIT 20`

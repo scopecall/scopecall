@@ -14,9 +14,10 @@ import (
 // render a recommendation + a drill-in link without re-querying.
 //
 // Severity tiers:
-//   high   — single-item potential savings > 1% of org's total spend in window
-//   medium — > 0.1% of total spend
-//   low    — anything else that still beat the floor
+//
+//	high   — single-item potential savings > 1% of org's total spend in window
+//	medium — > 0.1% of total spend
+//	low    — anything else that still beat the floor
 //
 // PotentialSavingsUSD is a deliberately conservative estimate: we model the
 // savings of "fix this and you stop paying this cost going forward" by
@@ -129,6 +130,10 @@ LIMIT 5`
 				Model:               model,
 			})
 		}
+		if err := rows.Err(); err != nil {
+			_ = rows.Close()
+			return nil, fmt.Errorf("waste-inbox retries rows: %w", err)
+		}
 		_ = rows.Close()
 	}
 
@@ -228,6 +233,10 @@ LIMIT 5`
 				Model:               expModel,
 			})
 		}
+		if err := rows.Err(); err != nil {
+			_ = rows.Close()
+			return nil, fmt.Errorf("waste-inbox model-misuse rows: %w", err)
+		}
 		_ = rows.Close()
 	}
 
@@ -290,6 +299,10 @@ LIMIT 5`
 				PotentialSavingsUSD: errCost,
 				Workflow:            wf,
 			})
+		}
+		if err := rows.Err(); err != nil {
+			_ = rows.Close()
+			return nil, fmt.Errorf("waste-inbox errors rows: %w", err)
 		}
 		_ = rows.Close()
 	}

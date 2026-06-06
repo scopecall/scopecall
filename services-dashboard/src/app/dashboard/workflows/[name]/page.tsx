@@ -185,8 +185,14 @@ export default function WorkflowDetailPage() {
           unknownLabel="(no agent)"
           onClickRow={(key) => {
             if (!key) return;
+            // Use the v0.3 hierarchy filters — ?workflow=… AND ?agent=… —
+            // so we land on traces actually inside this (workflow, agent)
+            // pair. feature_name on LLM rows is the step/call name, not
+            // the workflow, so equality there would silently miss the
+            // exact rows the user wants.
             const qs = new URLSearchParams({
-              feature_name: workflow,
+              workflow,
+              agent: key,
               from: range.from.toISOString(),
               to: range.to.toISOString(),
             });

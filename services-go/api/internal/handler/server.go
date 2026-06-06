@@ -88,6 +88,9 @@ func (s *Server) ListTraces(ctx context.Context, req gen.ListTracesRequestObject
 	args.Query = ctxStr(ctx, keyQuery)
 	args.PromptVersion = ctxStr(ctx, keyPromptVersion)
 	args.CustomerID = ctxStr(ctx, keyCustomerID)
+	args.Workflow = ctxStr(ctx, keyWorkflow)
+	args.Agent = ctxStr(ctx, keyAgent)
+	args.Step = ctxStr(ctx, keyStep)
 
 	res, err := query.ListTraces(ctx, s.CH, args)
 	if err != nil {
@@ -188,7 +191,6 @@ func (s *Server) ListAlerts(_ context.Context, _ gen.ListAlertsRequestObject) (g
 //	                                   route around it. This matters: without
 //	                                   the 503, a pod with both DBs down stays
 //	                                   in the LB pool and 500s every request.
-//
 //
 // ClickHouse + Postgres count as "critical" — either down → 503. Redis is a
 // cache; degraded Redis means slower queries but not broken, so it doesn't

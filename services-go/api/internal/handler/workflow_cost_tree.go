@@ -28,9 +28,17 @@ type workflowCostNodeJSON struct {
 }
 
 type workflowCostTreeResponseJSON struct {
-	WindowSeconds int                    `json:"window_seconds"`
-	TotalCostUSD  float64                `json:"total_cost_usd"`
-	Workflows     []workflowCostNodeJSON `json:"workflows"`
+	WindowSeconds int `json:"window_seconds"`
+	// TotalCostUSD = grand total across ALL workflows in the org's window
+	// (not just the top-N returned in Workflows). Computed via window
+	// function in the same scan, so it reflects every workflow that
+	// passed the HAVING filter.
+	TotalCostUSD float64 `json:"total_cost_usd"`
+	// VisibleCostUSD = sum across only the workflows actually returned in
+	// Workflows[]. When the response was LIMIT-capped, this is a proper
+	// subset of TotalCostUSD; otherwise they're equal.
+	VisibleCostUSD float64                `json:"visible_cost_usd"`
+	Workflows      []workflowCostNodeJSON `json:"workflows"`
 }
 
 // GetWorkflowCostTreeHTTP serves GET /api/v1/workflow-cost-tree — workflow
@@ -70,7 +78,7 @@ func (s *Server) GetWorkflowCostTreeHTTP(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
-	rows, err := query.WorkflowCostTree(r.Context(), s.CH, claims.OrgID, query.TimeWindow{From: from, To: to}, limit)
+	res, err := query.WorkflowCostTree(r.Context(), s.CH, claims.OrgID, query.TimeWindow{From: from, To: to}, limit)
 	if err != nil {
 		problem.Write(w, http.StatusInternalServerError, "Internal Server Error", "workflow-cost-tree query failed")
 		return
@@ -78,13 +86,14 @@ func (s *Server) GetWorkflowCostTreeHTTP(w http.ResponseWriter, r *http.Request)
 
 	resp := workflowCostTreeResponseJSON{
 		WindowSeconds: int(to.Sub(from).Seconds()),
-		Workflows:     make([]workflowCostNodeJSON, 0, len(rows)),
+		TotalCostUSD:  res.GrandTotalCurrentUSD,
+		Workflows:     make([]workflowCostNodeJSON, 0, len(res.Nodes)),
 	}
 	// Same noise-floor reasoning as TopMovers: a $0.0003 prior baseline divided
 	// into a $0.70 current is mathematically a 230,000% jump but useless to
 	// the user — they need to read it as "new traffic," not as a percentage.
 	const noiseFloor = 0.01
-	for _, n := range rows {
+	for _, n := range res.Nodes {
 		delta := n.CurrentCostUSD - n.PriorCostUSD
 		pct := 0.0
 		isNew := false
@@ -94,7 +103,7 @@ func (s *Server) GetWorkflowCostTreeHTTP(w http.ResponseWriter, r *http.Request)
 			pct = -1
 			isNew = true
 		}
-		resp.TotalCostUSD += n.CurrentCostUSD
+		resp.VisibleCostUSD += n.CurrentCostUSD
 		resp.Workflows = append(resp.Workflows, workflowCostNodeJSON{
 			Name:           n.Name,
 			CurrentCostUSD: n.CurrentCostUSD,

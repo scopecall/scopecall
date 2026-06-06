@@ -484,18 +484,220 @@ components:
 
     WorkflowCostTreeResponse:
       type: object
-      required: [window_seconds, total_cost_usd, workflows]
+      required: [window_seconds, total_cost_usd, visible_cost_usd, workflows]
       properties:
         window_seconds:
           type: integer
         total_cost_usd:
           type: number
           format: double
-          description: Sum of current_cost_usd across all returned workflows.
+          description: >
+            Grand total across ALL workflows in the org's window (not just
+            the top-N returned in `workflows`). Computed via a window
+            function in the same scan, so it reflects every workflow that
+            passed the HAVING filter.
+        visible_cost_usd:
+          type: number
+          format: double
+          description: >
+            Sum across only the workflows actually returned in `workflows`.
+            When the response was LIMIT-capped, this is a proper subset of
+            `total_cost_usd`; otherwise they are equal.
         workflows:
           type: array
           items:
             $ref: "#/components/schemas/WorkflowCostNode"
+
+    WorkflowBreakdownRow:
+      type: object
+      required: [key, cost_usd, calls, error_count]
+      properties:
+        key:
+          type: string
+        cost_usd:
+          type: number
+          format: double
+        calls:
+          type: integer
+        error_count:
+          type: integer
+
+    WorkflowSummary:
+      type: object
+      required:
+        [total_cost_usd, prior_cost_usd, delta_cost_usd, pct_change, is_new,
+         total_calls, error_count, customer_count, retry_cost_usd,
+         test_cost_usd, cache_read_savings_usd]
+      properties:
+        total_cost_usd:           { type: number, format: double }
+        prior_cost_usd:           { type: number, format: double }
+        delta_cost_usd:           { type: number, format: double }
+        pct_change:               { type: number, format: double }
+        is_new:                   { type: boolean }
+        total_calls:              { type: integer }
+        error_count:              { type: integer }
+        customer_count:           { type: integer }
+        retry_cost_usd:
+          type: number
+          format: double
+          description: Cost on calls where attempt_number > 1.
+        test_cost_usd:
+          type: number
+          format: double
+          description: Cost on calls where is_test=true.
+        cache_read_savings_usd:
+          type: number
+          format: double
+          description: Sum of cache_read_cost_usd — cost avoided via provider cache.
+
+    WorkflowDetailResponse:
+      type: object
+      required:
+        [workflow, window_seconds, summary, by_agent, by_step, by_customer,
+         by_model, cost_source_mix]
+      properties:
+        workflow:                 { type: string }
+        window_seconds:           { type: integer }
+        summary:                  { $ref: "#/components/schemas/WorkflowSummary" }
+        by_agent:
+          type: array
+          items: { $ref: "#/components/schemas/WorkflowBreakdownRow" }
+        by_step:
+          type: array
+          items: { $ref: "#/components/schemas/WorkflowBreakdownRow" }
+        by_customer:
+          type: array
+          items: { $ref: "#/components/schemas/WorkflowBreakdownRow" }
+        by_model:
+          type: array
+          items: { $ref: "#/components/schemas/WorkflowBreakdownRow" }
+        cost_source_mix:
+          type: array
+          items: { $ref: "#/components/schemas/WorkflowBreakdownRow" }
+
+    CustomerProfitabilityRow:
+      type: object
+      required:
+        [customer_id, current_cost_usd, prior_cost_usd, delta_cost_usd,
+         pct_change, is_new, current_calls, error_count, workflow_count,
+         model_count, retry_cost_usd, test_cost_usd, cache_read_savings_usd,
+         pct_of_attributed]
+      properties:
+        customer_id:              { type: string }
+        current_cost_usd:         { type: number, format: double }
+        prior_cost_usd:           { type: number, format: double }
+        delta_cost_usd:           { type: number, format: double }
+        pct_change:               { type: number, format: double }
+        is_new:                   { type: boolean }
+        current_calls:            { type: integer }
+        error_count:              { type: integer }
+        workflow_count:           { type: integer }
+        model_count:              { type: integer }
+        retry_cost_usd:           { type: number, format: double }
+        test_cost_usd:            { type: number, format: double }
+        cache_read_savings_usd:   { type: number, format: double }
+        pct_of_attributed:
+          type: number
+          format: double
+          description: Share of attributed cost (rows sum to 100%, excluding Unattributed).
+
+    CustomerProfitabilityResponse:
+      type: object
+      required:
+        [window_seconds, grand_total_cost_usd, attributed_cost_usd,
+         unattributed_cost_usd, attributed_customer_count, rows]
+      properties:
+        window_seconds:                 { type: integer }
+        grand_total_cost_usd:           { type: number, format: double }
+        attributed_cost_usd:            { type: number, format: double }
+        unattributed_cost_usd:
+          type: number
+          format: double
+          description: Spend with no customer_id (the "Unattributed" tile).
+        attributed_customer_count:      { type: integer }
+        rows:
+          type: array
+          items: { $ref: "#/components/schemas/CustomerProfitabilityRow" }
+
+    WasteItem:
+      type: object
+      required:
+        [kind, severity, headline, detail, recommendation,
+         potential_savings_usd]
+      properties:
+        kind:
+          type: string
+          enum: [retry_burner, model_misuse, high_error_workflow]
+        severity:
+          type: string
+          enum: [high, medium, low]
+        headline:                 { type: string }
+        detail:                   { type: string }
+        recommendation:           { type: string }
+        potential_savings_usd:    { type: number, format: double }
+        workflow:                 { type: string }
+        model:                    { type: string }
+        step:                     { type: string }
+
+    WasteInboxResponse:
+      type: object
+      required: [window_seconds, total_savings_usd, items]
+      properties:
+        window_seconds:           { type: integer }
+        total_savings_usd:
+          type: number
+          format: double
+          description: >
+            Upper-bound estimate. A single workflow that triggers multiple
+            rules (e.g. retries on errored calls) is counted under each
+            rule, so the headline can exceed the workflow's actual spend.
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/WasteItem" }
+
+    CostSourceShare:
+      type: object
+      required: [source, calls, cost_usd, pct_of_cost]
+      properties:
+        source:
+          type: string
+          description: >
+            Closed enum at the processor: server_computed | sdk_fallback |
+            unknown_model | container. The schema keeps it open-typed for
+            forward compatibility.
+        calls:                    { type: integer }
+        cost_usd:                 { type: number, format: double }
+        pct_of_cost:              { type: number, format: double }
+
+    UnknownModel:
+      type: object
+      required: [model, provider, calls, cost_usd]
+      properties:
+        model:                    { type: string }
+        provider:                 { type: string }
+        calls:                    { type: integer }
+        cost_usd:                 { type: number, format: double }
+
+    CostConfidenceResponse:
+      type: object
+      required:
+        [window_seconds, total_cost_usd, server_computed_cost_usd,
+         verified_pct, sources, unknown_models]
+      properties:
+        window_seconds:                  { type: integer }
+        total_cost_usd:                  { type: number, format: double }
+        server_computed_cost_usd:        { type: number, format: double }
+        verified_pct:
+          type: number
+          format: double
+          description: server_computed / total × 100. Defaults to 100 when total=0.
+        sources:
+          type: array
+          items: { $ref: "#/components/schemas/CostSourceShare" }
+        unknown_models:
+          type: array
+          items: { $ref: "#/components/schemas/UnknownModel" }
+
 
     ErrorBucket:
       type: object
@@ -747,6 +949,35 @@ paths:
             v0.3 — B2B tenant filter. Drilled into from /dashboard/customers and
             the workflow-detail by-customer panel. Pass __null__ to show calls
             with no customer_id (the "Unattributed" tile on the Customers page).
+        - name: workflow
+          in: query
+          required: false
+          schema:
+            type: string
+          description: >
+            v0.3 — scope to all calls inside the named workflow. Resolves to
+            a trace_id IN-subquery against kind='workflow' rows whose
+            feature_name equals this value. Use this instead of feature_name
+            when drilling in from the Workflow Treemap, Waste Inbox, or
+            workflow detail page — feature_name on LLM rows is the
+            step/call name and would silently miss the calls you want.
+        - name: agent
+          in: query
+          required: false
+          schema:
+            type: string
+          description: >
+            v0.3 — scope to all calls inside the named agent (kind='agent'
+            spans). Pair with `workflow` for "calls inside this agent of
+            this workflow". Same trace_id IN-subquery pattern as `workflow`.
+        - name: step
+          in: query
+          required: false
+          schema:
+            type: string
+          description: >
+            v0.3 — scope to all calls inside the named step (kind='step'
+            spans). Same trace_id IN-subquery pattern as `workflow`.
         - name: q
           in: query
           required: false
@@ -1022,6 +1253,138 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/WorkflowCostTreeResponse"
+        "400":
+          $ref: "#/components/responses/Problem400"
+        "401":
+          $ref: "#/components/responses/Problem401"
+        "403":
+          $ref: "#/components/responses/Problem403"
+
+  /api/v1/workflow-detail:
+    get:
+      operationId: GetWorkflowDetail
+      summary: One-shot rollup for the workflow detail page
+      description: >
+        Returns the workflow's summary (cost / calls / errors / customers /
+        retry-cost / test-cost / cache savings) plus five breakdowns
+        (by agent, by step, by customer, by model, by cost_source).
+        Agent attribution handles both `workflow → agent → step → llm` and
+        the direct `workflow → agent → llm` shape via two LEFT JOINs.
+      parameters:
+        - $ref: "#/components/parameters/OrgId"
+        - name: workflow
+          in: query
+          required: true
+          schema:
+            type: string
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+      responses:
+        "200":
+          description: Workflow detail payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkflowDetailResponse"
+        "400":
+          $ref: "#/components/responses/Problem400"
+        "401":
+          $ref: "#/components/responses/Problem401"
+        "403":
+          $ref: "#/components/responses/Problem403"
+
+  /api/v1/customer-profitability:
+    get:
+      operationId: GetCustomerProfitability
+      summary: Per-customer cost rollup with prior-period delta
+      description: >
+        B2B "is this customer profitable?" rollup. Sorted by current cost
+        descending. Carries waste signals (retry %, test %) per customer.
+        `unattributed_cost_usd` reflects spend with no customer_id (computed
+        against the org grand total, not the truncated row sum).
+      parameters:
+        - $ref: "#/components/parameters/OrgId"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+      responses:
+        "200":
+          description: Customers ordered by current-window cost descending
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerProfitabilityResponse"
+        "400":
+          $ref: "#/components/responses/Problem400"
+        "401":
+          $ref: "#/components/responses/Problem401"
+        "403":
+          $ref: "#/components/responses/Problem403"
+
+  /api/v1/waste-inbox:
+    get:
+      operationId: GetWasteInbox
+      summary: Deterministic-rule findings of wasted spend (Overview)
+      description: >
+        Three rules — retry burners, model misuse, high-error workflows —
+        run independently and merged into one ranked list. Each item
+        carries an upper-bound `potential_savings_usd`. The headline
+        `total_savings_usd` is also an upper bound; see schema for
+        rationale.
+      parameters:
+        - $ref: "#/components/parameters/OrgId"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+      responses:
+        "200":
+          description: Waste findings ordered by potential savings descending
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WasteInboxResponse"
+        "400":
+          $ref: "#/components/responses/Problem400"
+        "401":
+          $ref: "#/components/responses/Problem401"
+        "403":
+          $ref: "#/components/responses/Problem403"
+
+  /api/v1/cost-confidence:
+    get:
+      operationId: GetCostConfidence
+      summary: cost_source breakdown + unknown-model punch list
+      description: >
+        How much of the org's reported cost came from server-priced rows
+        (trustworthy) vs SDK fallback / unknown-model fallback
+        (unverifiable). Plus the top N models the pricing table doesn't
+        recognize — actionable for the user to add to
+        schemas/pricing/pricing.json.
+      parameters:
+        - $ref: "#/components/parameters/OrgId"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - name: unknown_limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+      responses:
+        "200":
+          description: cost_source shares + unknown-model punch list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CostConfidenceResponse"
         "400":
           $ref: "#/components/responses/Problem400"
         "401":

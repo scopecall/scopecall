@@ -194,6 +194,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workflow-detail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One-shot rollup for the workflow detail page
+         * @description Returns the workflow's summary (cost / calls / errors / customers / retry-cost / test-cost / cache savings) plus five breakdowns (by agent, by step, by customer, by model, by cost_source). Agent attribution handles both `workflow → agent → step → llm` and the direct `workflow → agent → llm` shape via two LEFT JOINs.
+         */
+        get: operations["GetWorkflowDetail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer-profitability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Per-customer cost rollup with prior-period delta
+         * @description B2B "is this customer profitable?" rollup. Sorted by current cost descending. Carries waste signals (retry %, test %) per customer. `unattributed_cost_usd` reflects spend with no customer_id (computed against the org grand total, not the truncated row sum).
+         */
+        get: operations["GetCustomerProfitability"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/waste-inbox": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Deterministic-rule findings of wasted spend (Overview)
+         * @description Three rules — retry burners, model misuse, high-error workflows — run independently and merged into one ranked list. Each item carries an upper-bound `potential_savings_usd`. The headline `total_savings_usd` is also an upper bound; see schema for rationale.
+         */
+        get: operations["GetWasteInbox"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cost-confidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * cost_source breakdown + unknown-model punch list
+         * @description How much of the org's reported cost came from server-priced rows (trustworthy) vs SDK fallback / unknown-model fallback (unverifiable). Plus the top N models the pricing table doesn't recognize — actionable for the user to add to schemas/pricing/pricing.json.
+         */
+        get: operations["GetCostConfidence"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sessions": {
         parameters: {
             query?: never;
@@ -473,10 +553,155 @@ export interface components {
             window_seconds: number;
             /**
              * Format: double
-             * @description Sum of current_cost_usd across all returned workflows.
+             * @description Grand total across ALL workflows in the org's window (not just the top-N returned in `workflows`). Computed via a window function in the same scan, so it reflects every workflow that passed the HAVING filter.
              */
             total_cost_usd: number;
+            /**
+             * Format: double
+             * @description Sum across only the workflows actually returned in `workflows`. When the response was LIMIT-capped, this is a proper subset of `total_cost_usd`; otherwise they are equal.
+             */
+            visible_cost_usd: number;
             workflows: components["schemas"]["WorkflowCostNode"][];
+        };
+        WorkflowBreakdownRow: {
+            key: string;
+            /** Format: double */
+            cost_usd: number;
+            calls: number;
+            error_count: number;
+        };
+        WorkflowSummary: {
+            /** Format: double */
+            total_cost_usd: number;
+            /** Format: double */
+            prior_cost_usd: number;
+            /** Format: double */
+            delta_cost_usd: number;
+            /** Format: double */
+            pct_change: number;
+            is_new: boolean;
+            total_calls: number;
+            error_count: number;
+            customer_count: number;
+            /**
+             * Format: double
+             * @description Cost on calls where attempt_number > 1.
+             */
+            retry_cost_usd: number;
+            /**
+             * Format: double
+             * @description Cost on calls where is_test=true.
+             */
+            test_cost_usd: number;
+            /**
+             * Format: double
+             * @description Sum of cache_read_cost_usd — cost avoided via provider cache.
+             */
+            cache_read_savings_usd: number;
+        };
+        WorkflowDetailResponse: {
+            workflow: string;
+            window_seconds: number;
+            summary: components["schemas"]["WorkflowSummary"];
+            by_agent: components["schemas"]["WorkflowBreakdownRow"][];
+            by_step: components["schemas"]["WorkflowBreakdownRow"][];
+            by_customer: components["schemas"]["WorkflowBreakdownRow"][];
+            by_model: components["schemas"]["WorkflowBreakdownRow"][];
+            cost_source_mix: components["schemas"]["WorkflowBreakdownRow"][];
+        };
+        CustomerProfitabilityRow: {
+            customer_id: string;
+            /** Format: double */
+            current_cost_usd: number;
+            /** Format: double */
+            prior_cost_usd: number;
+            /** Format: double */
+            delta_cost_usd: number;
+            /** Format: double */
+            pct_change: number;
+            is_new: boolean;
+            current_calls: number;
+            error_count: number;
+            workflow_count: number;
+            model_count: number;
+            /** Format: double */
+            retry_cost_usd: number;
+            /** Format: double */
+            test_cost_usd: number;
+            /** Format: double */
+            cache_read_savings_usd: number;
+            /**
+             * Format: double
+             * @description Share of attributed cost (rows sum to 100%, excluding Unattributed).
+             */
+            pct_of_attributed: number;
+        };
+        CustomerProfitabilityResponse: {
+            window_seconds: number;
+            /** Format: double */
+            grand_total_cost_usd: number;
+            /** Format: double */
+            attributed_cost_usd: number;
+            /**
+             * Format: double
+             * @description Spend with no customer_id (the "Unattributed" tile).
+             */
+            unattributed_cost_usd: number;
+            attributed_customer_count: number;
+            rows: components["schemas"]["CustomerProfitabilityRow"][];
+        };
+        WasteItem: {
+            /** @enum {string} */
+            kind: "retry_burner" | "model_misuse" | "high_error_workflow";
+            /** @enum {string} */
+            severity: "high" | "medium" | "low";
+            headline: string;
+            detail: string;
+            recommendation: string;
+            /** Format: double */
+            potential_savings_usd: number;
+            workflow?: string;
+            model?: string;
+            step?: string;
+        };
+        WasteInboxResponse: {
+            window_seconds: number;
+            /**
+             * Format: double
+             * @description Upper-bound estimate. A single workflow that triggers multiple rules (e.g. retries on errored calls) is counted under each rule, so the headline can exceed the workflow's actual spend.
+             */
+            total_savings_usd: number;
+            items: components["schemas"]["WasteItem"][];
+        };
+        CostSourceShare: {
+            /** @description Closed enum at the processor: server_computed | sdk_fallback | unknown_model | container. The schema keeps it open-typed for forward compatibility. */
+            source: string;
+            calls: number;
+            /** Format: double */
+            cost_usd: number;
+            /** Format: double */
+            pct_of_cost: number;
+        };
+        UnknownModel: {
+            model: string;
+            provider: string;
+            calls: number;
+            /** Format: double */
+            cost_usd: number;
+        };
+        CostConfidenceResponse: {
+            window_seconds: number;
+            /** Format: double */
+            total_cost_usd: number;
+            /** Format: double */
+            server_computed_cost_usd: number;
+            /**
+             * Format: double
+             * @description server_computed / total × 100. Defaults to 100 when total=0.
+             */
+            verified_pct: number;
+            sources: components["schemas"]["CostSourceShare"][];
+            unknown_models: components["schemas"]["UnknownModel"][];
         };
         ErrorBucket: {
             /** Format: date-time */
@@ -638,6 +863,12 @@ export interface operations {
                 prompt_version?: string;
                 /** @description v0.3 — B2B tenant filter. Drilled into from /dashboard/customers and the workflow-detail by-customer panel. Pass __null__ to show calls with no customer_id (the "Unattributed" tile on the Customers page). */
                 customer_id?: string;
+                /** @description v0.3 — scope to all calls inside the named workflow. Resolves to a trace_id IN-subquery against kind='workflow' rows whose feature_name equals this value. Use this instead of feature_name when drilling in from the Workflow Treemap, Waste Inbox, or workflow detail page — feature_name on LLM rows is the step/call name and would silently miss the calls you want. */
+                workflow?: string;
+                /** @description v0.3 — scope to all calls inside the named agent (kind='agent' spans). Pair with `workflow` for "calls inside this agent of this workflow". Same trace_id IN-subquery pattern as `workflow`. */
+                agent?: string;
+                /** @description v0.3 — scope to all calls inside the named step (kind='step' spans). Same trace_id IN-subquery pattern as `workflow`. */
+                step?: string;
                 /** @description Free-text search. Exact-match on span_id / trace_id / session_id / user_id; case-insensitive substring on input_text / output_text / error_message (text-column matching skipped for viewer role). */
                 q?: string;
             };
@@ -933,6 +1164,129 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkflowCostTreeResponse"];
+                };
+            };
+            400: components["responses"]["Problem400"];
+            401: components["responses"]["Problem401"];
+            403: components["responses"]["Problem403"];
+        };
+    };
+    GetWorkflowDetail: {
+        parameters: {
+            query: {
+                /** @description Organization ID. Must match the org_id in the authenticated token. */
+                org_id: components["parameters"]["OrgId"];
+                workflow: string;
+                /** @description Absolute ISO8601 timestamp (e.g. 2026-05-01T00:00:00Z). Relative values (now-24h) are rejected with 400. */
+                from: components["parameters"]["From"];
+                /** @description Absolute ISO8601 timestamp (e.g. 2026-05-22T00:00:00Z). Must be after 'from'. */
+                to: components["parameters"]["To"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Workflow detail payload */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowDetailResponse"];
+                };
+            };
+            400: components["responses"]["Problem400"];
+            401: components["responses"]["Problem401"];
+            403: components["responses"]["Problem403"];
+        };
+    };
+    GetCustomerProfitability: {
+        parameters: {
+            query: {
+                /** @description Organization ID. Must match the org_id in the authenticated token. */
+                org_id: components["parameters"]["OrgId"];
+                /** @description Absolute ISO8601 timestamp (e.g. 2026-05-01T00:00:00Z). Relative values (now-24h) are rejected with 400. */
+                from: components["parameters"]["From"];
+                /** @description Absolute ISO8601 timestamp (e.g. 2026-05-22T00:00:00Z). Must be after 'from'. */
+                to: components["parameters"]["To"];
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Customers ordered by current-window cost descending */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerProfitabilityResponse"];
+                };
+            };
+            400: components["responses"]["Problem400"];
+            401: components["responses"]["Problem401"];
+            403: components["responses"]["Problem403"];
+        };
+    };
+    GetWasteInbox: {
+        parameters: {
+            query: {
+                /** @description Organization ID. Must match the org_id in the authenticated token. */
+                org_id: components["parameters"]["OrgId"];
+                /** @description Absolute ISO8601 timestamp (e.g. 2026-05-01T00:00:00Z). Relative values (now-24h) are rejected with 400. */
+                from: components["parameters"]["From"];
+                /** @description Absolute ISO8601 timestamp (e.g. 2026-05-22T00:00:00Z). Must be after 'from'. */
+                to: components["parameters"]["To"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Waste findings ordered by potential savings descending */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WasteInboxResponse"];
+                };
+            };
+            400: components["responses"]["Problem400"];
+            401: components["responses"]["Problem401"];
+            403: components["responses"]["Problem403"];
+        };
+    };
+    GetCostConfidence: {
+        parameters: {
+            query: {
+                /** @description Organization ID. Must match the org_id in the authenticated token. */
+                org_id: components["parameters"]["OrgId"];
+                /** @description Absolute ISO8601 timestamp (e.g. 2026-05-01T00:00:00Z). Relative values (now-24h) are rejected with 400. */
+                from: components["parameters"]["From"];
+                /** @description Absolute ISO8601 timestamp (e.g. 2026-05-22T00:00:00Z). Must be after 'from'. */
+                to: components["parameters"]["To"];
+                unknown_limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description cost_source shares + unknown-model punch list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CostConfidenceResponse"];
                 };
             };
             400: components["responses"]["Problem400"];

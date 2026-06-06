@@ -12,9 +12,9 @@ import (
 )
 
 type costSourceShareJSON struct {
-	Source  string  `json:"source"`
-	Calls   int     `json:"calls"`
-	CostUSD float64 `json:"cost_usd"`
+	Source    string  `json:"source"`
+	Calls     int     `json:"calls"`
+	CostUSD   float64 `json:"cost_usd"`
 	PctOfCost float64 `json:"pct_of_cost"`
 }
 
@@ -26,14 +26,14 @@ type unknownModelJSON struct {
 }
 
 type costConfidenceResponseJSON struct {
-	WindowSeconds       int                    `json:"window_seconds"`
-	TotalCostUSD        float64                `json:"total_cost_usd"`
-	ServerComputedUSD   float64                `json:"server_computed_cost_usd"`
+	WindowSeconds     int     `json:"window_seconds"`
+	TotalCostUSD      float64 `json:"total_cost_usd"`
+	ServerComputedUSD float64 `json:"server_computed_cost_usd"`
 	// VerifiedPct = server_computed / total — the single headline number.
 	// 100.0 when total=0 (degenerate empty window — nothing to be wrong about).
-	VerifiedPct  float64               `json:"verified_pct"`
-	Sources      []costSourceShareJSON `json:"sources"`
-	UnknownModels []unknownModelJSON   `json:"unknown_models"`
+	VerifiedPct   float64               `json:"verified_pct"`
+	Sources       []costSourceShareJSON `json:"sources"`
+	UnknownModels []unknownModelJSON    `json:"unknown_models"`
 }
 
 // GetCostConfidenceHTTP serves GET /api/v1/cost-confidence — the

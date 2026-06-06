@@ -22,6 +22,14 @@ interface TracesParams {
   /** v0.3 — B2B tenant filter. Drilled into from /dashboard/customers and
    *  the workflow-detail by-customer panel. */
   customerId?: string;
+  /** v0.3 — scope to all calls inside this workflow (resolves to trace_id
+   *  IN-subquery against kind='workflow' rows). Use this instead of
+   *  featureName when drilling from the Workflow Treemap or Waste Inbox. */
+  workflow?: string;
+  /** v0.3 — scope to all calls inside this agent. */
+  agent?: string;
+  /** v0.3 — scope to all calls inside this step. */
+  step?: string;
   /** When set, the query refetches at this interval (ms). For live-tail. */
   refetchIntervalMs?: number;
 }
@@ -43,6 +51,9 @@ export function useTraces(params: TracesParams, enabled = true) {
       params.q,
       params.promptVersion,
       params.customerId,
+      params.workflow,
+      params.agent,
+      params.step,
     ],
     queryFn: async () => {
       const token = await auth.getAccessToken();
@@ -66,6 +77,9 @@ export function useTraces(params: TracesParams, enabled = true) {
             q: params.q,
             prompt_version: params.promptVersion,
             customer_id: params.customerId,
+            workflow: params.workflow,
+            agent: params.agent,
+            step: params.step,
           },
         },
       });

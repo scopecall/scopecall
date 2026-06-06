@@ -26,7 +26,12 @@ export interface WorkflowCostNode {
 
 export interface WorkflowCostTreeResponse {
   window_seconds: number;
+  /** Grand total across ALL workflows in the org's window (not just the
+   *  top-N returned in `workflows`). */
   total_cost_usd: number;
+  /** Sum across only the workflows actually returned. When the response
+   *  was LIMIT-capped, this is a strict subset of total_cost_usd. */
+  visible_cost_usd: number;
   workflows: WorkflowCostNode[];
 }
 

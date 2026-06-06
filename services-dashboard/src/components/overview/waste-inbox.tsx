@@ -80,21 +80,23 @@ export function WasteInbox({ orgId, from, to, enabled }: Props) {
 
   function onItemClick(item: WasteItem) {
     // Best-effort drill-in. Each rule kind maps to a slightly different
-    // surface — retry burner → traces filtered by workflow×model, model
-    // misuse → traces filtered by step, high-error → traces with status=error
-    // pre-applied.
+    // surface using the v0.3 hierarchy filters (?workflow= / ?step=) —
+    // NOT feature_name, which on LLM rows is the step/call name and
+    // would miss the very calls we're trying to inspect. The traces
+    // endpoint resolves these via trace_id IN-subqueries against the
+    // matching kind='workflow'/'step' spans.
     const qs = new URLSearchParams({
       from: from.toISOString(),
       to: to.toISOString(),
     });
     if (item.kind === "retry_burner") {
-      if (item.workflow) qs.set("feature_name", item.workflow);
+      if (item.workflow) qs.set("workflow", item.workflow);
       if (item.model) qs.set("model", item.model);
     } else if (item.kind === "model_misuse") {
-      if (item.step) qs.set("feature_name", item.step);
+      if (item.step) qs.set("step", item.step);
       if (item.model) qs.set("model", item.model);
     } else if (item.kind === "high_error_workflow") {
-      if (item.workflow) qs.set("feature_name", item.workflow);
+      if (item.workflow) qs.set("workflow", item.workflow);
       qs.set("status", "error");
     }
     router.push(`/dashboard/traces?${qs.toString()}`);

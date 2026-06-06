@@ -23,9 +23,9 @@ type wasteItemJSON struct {
 }
 
 type wasteInboxResponseJSON struct {
-	WindowSeconds       int             `json:"window_seconds"`
-	TotalSavingsUSD     float64         `json:"total_savings_usd"`
-	Items               []wasteItemJSON `json:"items"`
+	WindowSeconds   int             `json:"window_seconds"`
+	TotalSavingsUSD float64         `json:"total_savings_usd"`
+	Items           []wasteItemJSON `json:"items"`
 }
 
 // GetWasteInboxHTTP serves GET /api/v1/waste-inbox — deterministic-rule
