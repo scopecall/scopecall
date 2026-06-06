@@ -165,6 +165,49 @@ test-traffic flag. Wire-compatible with the platform `v0.3.0` release.
 
 ---
 
+## TypeScript SDK — [0.3.0] — 2026-06-06
+
+Cost-attribution release for `@scopecall/scopecall-js`. Mirrors the
+Python SDK 0.3.0 surface so both SDKs ship the same v0.3 cost-
+attribution capabilities. Wire-compatible with the platform `v0.3.0`
+release.
+
+Version jumps 0.1.x → 0.3.0 to align with the platform tag — same
+underlying APIs as Python SDK 0.3.0.
+
+### Added
+
+- `sdk.workflow(name, fn, opts?)` / `sdk.agent(name, fn, opts?)` /
+  `sdk.step(name, fn, opts?)` — three nested async-callback helpers
+  over `sdk.trace()` that emit distinct container span kinds
+  (`workflow` / `agent` / `step`). Nesting is voluntary; the
+  dashboard rolls up cost from LLM calls to whichever ancestor you
+  wrap.
+- `customerId` on `TraceOptions` — B2B tenant attribution distinct
+  from `userId`. Inherited from parent traces. PII contract: must be
+  a tenant / account slug or opaque ID, never raw email / name /
+  PII.
+- `test: boolean` on `ScopeCallConfig` (or `SCOPECALL_TEST=1` env
+  var) — tags every event with `is_test=true` so non-production
+  traffic (vitest / jest runs, eval suites, replays) stays out of
+  production cost reports.
+- README "Cost attribution hierarchy" section with worked examples
+  of the nested workflow / agent / step pattern. Quickstart and
+  optional-metadata examples updated to use `sdk.workflow()` in
+  place of bare `sdk.trace()`.
+
+### Notes
+
+- `sdk.trace(name, fn, opts?)` remains supported as a backward-
+  compatible alias for `sdk.workflow()` — every example in the
+  README that uses `sdk.trace(...)` continues to work.
+- Providers table corrected: Gemini → v0.3.1, native LangChain /
+  LlamaIndex bridges → v0.5.0, OpenTelemetry-bridged frameworks
+  (CrewAI / AutoGen / DSPy) → v0.4.x. OpenAI, Anthropic, and
+  Vercel AI SDK instrumentation continue to work in 0.3.0.
+
+---
+
 ## TypeScript SDK — [0.1.2] — 2026-06-04
 
 ### Changed

@@ -241,10 +241,18 @@ Every `chat.completions.create` call captures:
 
 | Provider | Status |
 |----------|--------|
-| OpenAI   | ✅ v0.1.0 — `chat.completions.create` (streaming + non-streaming) |
-| Anthropic | ✅ v0.1.1 — `messages.create` (streaming + non-streaming) |
-| Vercel AI SDK | ✅ v0.1.1 — `generateText`, `streamText`, `generateObject`, `streamObject` (every entry point that hits `doGenerate` / `doStream`) |
-| Gemini   | 🔜 v0.1.2 |
+| OpenAI   | ✅ since v0.1.0 — `chat.completions.create` (streaming + non-streaming) |
+| Anthropic | ✅ since v0.1.1 — `messages.create` (streaming + non-streaming) |
+| Vercel AI SDK | ✅ since v0.1.1 — `generateText`, `streamText`, `generateObject`, `streamObject` (every entry point that hits `doGenerate` / `doStream`) |
+| Google Gemini | 🔜 v0.3.1 |
+| LangChain (via manual `sdk.trace()` today; native bridge planned) | 🔜 v0.5.0 |
+| LlamaIndex (via manual `sdk.trace()` today; native bridge planned) | 🔜 v0.5.0 |
+| CrewAI / AutoGen / DSPy (via the OpenTelemetry GenAI bridge) | 🔜 v0.4.x |
+
+OpenAI, Anthropic, and Vercel AI SDK instrumentation continue to work
+in v0.3.0; the release added the cost-attribution hierarchy
+(`sdk.workflow()` / `sdk.agent()` / `sdk.step()`) and `customerId` /
+`test` config on top of the existing provider instrumentation.
 
 ### Anthropic usage
 
