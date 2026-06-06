@@ -207,6 +207,20 @@ export default function WorkflowDetailPage() {
           emptyLabel="No step-tagged calls. Wrap with sdk.step() to attribute."
           denom={data ? denom(data.by_step) : 1}
           unknownLabel="(no step)"
+          onClickRow={(key) => {
+            if (!key) return;
+            // Drill to /traces filtered by ?workflow=…&step=…. Server-side
+            // step resolves to parent_span_id IN (step.span_id) so only the
+            // LLM calls actually under this step come back, not every call
+            // in the workflow.
+            const qs = new URLSearchParams({
+              workflow,
+              step: key,
+              from: range.from.toISOString(),
+              to: range.to.toISOString(),
+            });
+            router.push(`/dashboard/traces?${qs.toString()}`);
+          }}
         />
         <BreakdownPanel
           title="By customer"

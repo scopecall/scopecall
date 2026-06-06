@@ -85,14 +85,22 @@ type ListTracesArgs struct {
 	// workflow detail by-customer panel. Supports nullSentinel to surface
 	// calls with no customer_id (the "Unattributed" tile on the customers page).
 	CustomerID string
-	// v0.3 — cost-attribution-hierarchy filters. These resolve to a
-	// trace_id IN-subquery against the kind='workflow' / 'agent' / 'step'
-	// rows respectively. They are the right way to scope traces to "all
-	// calls inside this workflow / agent / step" — NOT feature_name
-	// equality, which on LLM rows resolves to the step/call name (so
-	// feature_name='refund-bot' would match the workflow span but miss
-	// every LLM call inside it). Drilled into from the Waste Inbox,
-	// workflow-detail page, and the Workflow Treemap.
+	// v0.3 — cost-attribution-hierarchy filters. Each maps to a different
+	// SQL shape because the three levels of the hierarchy have different
+	// structural relationships to LLM calls (see hierarchyFilterClauses):
+	//
+	//   Workflow → trace_id IN (...)        — workflow is trace-level
+	//   Step     → parent_span_id IN (...)  — step is the direct parent
+	//   Agent    → parent_span_id IN (
+	//                  agent UNION step-under-agent)
+	//                                       — agent can be 1 or 2 hops up
+	//
+	// All three are the correct way to scope traces to "all calls inside
+	// this workflow / agent / step" — NOT feature_name equality, which on
+	// LLM rows resolves to the step/call name (so feature_name='refund-bot'
+	// would match the workflow span but miss every LLM call inside it).
+	// Drilled into from the Waste Inbox, workflow-detail page, and the
+	// Workflow Treemap.
 	Workflow string // workflow feature_name on a kind='workflow' span
 	Agent    string // agent feature_name on a kind='agent' span
 	Step     string // step feature_name on a kind='step' span
@@ -205,40 +213,48 @@ func ListTraces(ctx context.Context, ch driver.Conn, args ListTracesArgs) (*List
 		queryArgs = append(queryArgs, driver.NamedValue{Name: f.name, Value: f.val})
 	}
 
-	// v0.3 — workflow / agent / step hierarchy filters. Each resolves to a
-	// trace_id IN-subquery: "this span belongs to a trace whose
-	// kind='workflow'/'agent'/'step' row has feature_name = X". This is the
-	// correct way to scope to "all calls inside this workflow" — equality on
-	// the LLM row's own feature_name would only match LLM rows tagged with
-	// the workflow name (rare; usually feature_name on LLM rows is the
-	// step/call name).
+	// v0.3 — workflow / agent / step hierarchy filters. The three filters
+	// have DIFFERENT structural meanings, so they need different subqueries:
 	//
-	// The subqueries are bounded by the same org_id + (prior-window-safe)
-	// time range as the outer query, so they stay cheap. We scope to
-	// `timestamp >= from - 1 day AND timestamp < to` so a workflow span
-	// emitted up to a day before the visible window still attributes its
-	// children — workflows can outlive the immediate range when users
-	// re-query an older slice.
-	hierarchyFilters := []struct {
-		val, kind, paramName string
-	}{
-		{args.Workflow, "workflow", "wf_name"},
-		{args.Agent, "agent", "ag_name"},
-		{args.Step, "step", "st_name"},
-	}
-	for _, hf := range hierarchyFilters {
-		if hf.val == "" {
-			continue
-		}
-		conds = append(conds, fmt.Sprintf(`trace_id IN (
-            SELECT trace_id FROM llm_calls
-            WHERE org_id = {org_id:String}
-              AND kind = '%s'
-              AND coalesce(nullIf(feature_name, ''), '') = {%s:String}
-              AND timestamp >= {from:DateTime('UTC')} - INTERVAL 1 DAY
-              AND timestamp <  {to:DateTime('UTC')}
-        )`, hf.kind, hf.paramName))
-		queryArgs = append(queryArgs, driver.NamedValue{Name: hf.paramName, Value: hf.val})
+	//   workflow:  trace-level. Matches every span in any trace whose
+	//              kind='workflow' root has feature_name = ?.
+	//              → trace_id IN (...)
+	//
+	//   step:      direct-parent. Matches LLM rows whose immediate parent
+	//              span is a kind='step' span with feature_name = ?.
+	//              Step is the nearest meaningful ancestor of an LLM call
+	//              by design, so a single parent_span_id IN-list captures
+	//              the right set with no ambiguity.
+	//              → parent_span_id IN (step.span_id)
+	//
+	//   agent:     ancestor-up-to-two-hops. An LLM call can sit DIRECTLY
+	//              under an agent (workflow → agent → llm), OR under a
+	//              step which sits under the agent (workflow → agent →
+	//              step → llm). Both are valid; the filter has to match
+	//              either parent_span_id directly or transitively via the
+	//              step layer. We UNION the two parent-id sets inside the
+	//              IN-list.
+	//              → parent_span_id IN (
+	//                  agent.span_id
+	//                  UNION ALL
+	//                  step.span_id WHERE step.parent_span_id = agent.span_id
+	//                )
+	//
+	// trace_id IN with `agent` was a previous-revision bug: it returned
+	// every LLM call in a trace that contained the agent anywhere, not
+	// just the calls actually under that agent. Same shape of bug for
+	// step.
+	//
+	// All subqueries are bounded by the same org_id + (prior-window-safe)
+	// time range — workflow/agent/step spans emitted up to a day before
+	// the visible window still attribute their children, since users
+	// re-querying older slices need the cross-window join to resolve.
+	hConds, hArgs := hierarchyFilterClauses(args)
+	conds = append(conds, hConds...)
+	// queryArgs is []any (ch.Query is variadic), so we widen each NamedValue
+	// as we splice in. Same pattern as the rest of this builder.
+	for _, a := range hArgs {
+		queryArgs = append(queryArgs, a)
 	}
 
 	// Free-text search. ID columns match exactly; text columns use
@@ -423,4 +439,79 @@ LIMIT 1
 		return nil, fmt.Errorf("scan trace row: %w", err)
 	}
 	return &t, nil
+}
+
+// hierarchyFilterClauses produces the SQL conditions + named-arg slice that
+// implement the v0.3 workflow/agent/step trace filters. Extracted so the
+// SQL-shape contract can be asserted by unit tests without a live
+// ClickHouse — getting the parent-vs-trace semantics right per filter type
+// is the correctness boundary the previous revision missed.
+//
+// Contract per filter:
+//
+//	workflow → trace_id IN (workflow.trace_id)        — trace-level
+//	step     → parent_span_id IN (step.span_id)       — direct parent
+//	agent    → parent_span_id IN (                    — ancestor (≤2 hops)
+//	              agent.span_id
+//	              UNION ALL
+//	              step.span_id WHERE step's parent is the agent
+//	           )
+//
+// All subqueries are scoped by org_id and `timestamp ∈ [from - 1 day, to)` —
+// the one-day grace covers workflow/agent/step spans emitted slightly
+// before the requested visible window (relevant when users re-query a
+// historical slice).
+func hierarchyFilterClauses(args ListTracesArgs) ([]string, []driver.NamedValue) {
+	var conds []string
+	var qa []driver.NamedValue
+	if args.Workflow != "" {
+		conds = append(conds, `trace_id IN (
+            SELECT trace_id FROM llm_calls
+            WHERE org_id = {org_id:String}
+              AND kind = 'workflow'
+              AND coalesce(nullIf(feature_name, ''), '') = {wf_name:String}
+              AND timestamp >= {from:DateTime('UTC')} - INTERVAL 1 DAY
+              AND timestamp <  {to:DateTime('UTC')}
+        )`)
+		qa = append(qa, driver.NamedValue{Name: "wf_name", Value: args.Workflow})
+	}
+	if args.Step != "" {
+		conds = append(conds, `parent_span_id IN (
+            SELECT span_id FROM llm_calls
+            WHERE org_id = {org_id:String}
+              AND kind = 'step'
+              AND coalesce(nullIf(feature_name, ''), '') = {st_name:String}
+              AND timestamp >= {from:DateTime('UTC')} - INTERVAL 1 DAY
+              AND timestamp <  {to:DateTime('UTC')}
+        )`)
+		qa = append(qa, driver.NamedValue{Name: "st_name", Value: args.Step})
+	}
+	if args.Agent != "" {
+		// UNION ALL — both halves emit span_id, the outer IN-list dedupes
+		// at lookup time. ALL (not UNION) avoids a sort/dedupe step in CH;
+		// a span_id can't legitimately appear under both an agent and a
+		// step-under-agent at the same time, so dedup would be a no-op.
+		conds = append(conds, `parent_span_id IN (
+            SELECT span_id FROM llm_calls
+            WHERE org_id = {org_id:String}
+              AND kind = 'agent'
+              AND coalesce(nullIf(feature_name, ''), '') = {ag_name:String}
+              AND timestamp >= {from:DateTime('UTC')} - INTERVAL 1 DAY
+              AND timestamp <  {to:DateTime('UTC')}
+            UNION ALL
+            SELECT s.span_id FROM llm_calls s
+            INNER JOIN llm_calls a ON s.parent_span_id = a.span_id
+            WHERE s.org_id = {org_id:String}
+              AND a.org_id = {org_id:String}
+              AND s.kind = 'step'
+              AND a.kind = 'agent'
+              AND coalesce(nullIf(a.feature_name, ''), '') = {ag_name:String}
+              AND s.timestamp >= {from:DateTime('UTC')} - INTERVAL 1 DAY
+              AND s.timestamp <  {to:DateTime('UTC')}
+              AND a.timestamp >= {from:DateTime('UTC')} - INTERVAL 1 DAY
+              AND a.timestamp <  {to:DateTime('UTC')}
+        )`)
+		qa = append(qa, driver.NamedValue{Name: "ag_name", Value: args.Agent})
+	}
+	return conds, qa
 }
