@@ -26,11 +26,13 @@ const (
 	// from the workflow-detail page's by-customer breakdown. Distinct from
 	// user_id (the end-user of the customer's app).
 	keyCustomerID
-	// v0.3 — cost-attribution-hierarchy filters. These resolve to trace_id
-	// IN-subqueries against the kind='workflow'/'agent'/'step' rows. Used
-	// by Waste Inbox drill-ins, Workflow Treemap drill-ins, and the
-	// workflow detail page's by-agent / by-step click handlers. Distinct
-	// from feature_name — see ListTracesArgs doc-comments.
+	// v0.3 — cost-attribution-hierarchy filters. Each maps to a different
+	// SQL shape — workflow is trace-level, step is direct-parent, agent
+	// is ancestor (≤ 2 hops) — see hierarchyFilterClauses in
+	// query/traces.go for the per-filter contract. Used by Waste Inbox
+	// drill-ins, Workflow Treemap drill-ins, and the workflow detail
+	// page's by-agent / by-step click handlers. Distinct from
+	// feature_name (which on LLM rows is the step/call name).
 	keyWorkflow
 	keyAgent
 	keyStep

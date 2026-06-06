@@ -513,10 +513,14 @@ function TracesView() {
       {/* v0.3 hierarchy chips — workflow / agent / step. Same chip-only
           pattern as customer_id and prompt_version: arrived here via
           drill-in from the Workflow Treemap, Waste Inbox, or workflow
-          detail page. Server-side these resolve to trace_id IN-subqueries
-          against the matching kind='workflow' / 'agent' / 'step' spans,
-          so the displayed traces are everything *inside* the named
-          unit — not just rows whose feature_name happens to equal it. */}
+          detail page. Server-side, each filter has its own shape:
+          workflow is trace-level (trace_id IN), step is direct-parent
+          (parent_span_id IN step.span_id), agent is ancestor up to two
+          hops (parent_span_id IN agent.span_id UNION step.span_id under
+          agent). So the displayed traces are everything *inside* the
+          named unit — not just rows whose feature_name happens to
+          equal it. See hierarchyFilterClauses in
+          services-go/api/internal/query/traces.go. */}
       {workflowFilter && (
         <div className="flex items-center gap-2 px-3 py-2 rounded-md border border-brand/30 bg-brand/10 text-xs">
           <span className="text-muted-foreground">Workflow:</span>

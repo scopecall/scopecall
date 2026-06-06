@@ -68,6 +68,30 @@ the new data into actionable spend.
   `scripts/backfill-llm-metrics-hourly.sh` already ships today;
   v0.3.1 wraps it in a one-click dashboard action with progress +
   dry-run.
+- **Waste Inbox lookback alignment.** Waste Inbox currently builds
+  its workflow/step maps over `[from, to)` only; the `/traces`
+  hierarchy filters use `[from - 1 day, to)`. A workflow span
+  emitted just before the visible window can have its child LLM
+  calls miss the Waste Inbox's model-misuse / retry-burner signals.
+  Align the lookback to one day across the board.
+- **Workflow-detail by-customer / by-model drill-ins.** The agent
+  and step panels on `/dashboard/workflows/[name]` are clickable
+  and drill into `/traces` with the right hierarchy filter. The
+  by-customer and by-model panels still aren't — trivial wiring
+  (`?customer_id=…` and `?model=…` are both supported server-side),
+  just hasn't shipped.
+- **Live-ClickHouse integration tests for the hierarchy filters.**
+  The v0.3 tests in `services-go/api/internal/query/traces_test.go`
+  pin the SQL-shape contract via string assertions. Adding a
+  testcontainers-based ClickHouse test (similar to
+  `services-rust/processor/tests/integration_test.rs`) would catch
+  semantic regressions in addition to shape regressions.
+- **Migrate dashboard hooks from manual `fetch` to the generated
+  client.** The 5 new v0.3 endpoints (`/workflow-cost-tree`,
+  `/workflow-detail`, `/customer-profitability`, `/waste-inbox`,
+  `/cost-confidence`) all use hand-rolled `fetch` in their React
+  hooks rather than the `createApiClient()` wrapper. Working today
+  but loses the CI gate's spec-drift catch.
 
 ## Then — v0.4.x
 

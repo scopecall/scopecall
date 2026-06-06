@@ -82,9 +82,10 @@ export function WasteInbox({ orgId, from, to, enabled }: Props) {
     // Best-effort drill-in. Each rule kind maps to a slightly different
     // surface using the v0.3 hierarchy filters (?workflow= / ?step=) —
     // NOT feature_name, which on LLM rows is the step/call name and
-    // would miss the very calls we're trying to inspect. The traces
-    // endpoint resolves these via trace_id IN-subqueries against the
-    // matching kind='workflow'/'step' spans.
+    // would miss the very calls we're trying to inspect. Server-side,
+    // workflow resolves trace-level (trace_id IN); step resolves to a
+    // direct-parent match (parent_span_id IN step.span_id). See
+    // hierarchyFilterClauses in services-go/api/internal/query/traces.go.
     const qs = new URLSearchParams({
       from: from.toISOString(),
       to: to.toISOString(),
