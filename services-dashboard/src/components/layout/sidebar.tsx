@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Bell, Coins, FileText, Home, KeyRound, List, LogOut, Share2, Users } from "lucide-react";
+import { Bell, Building2, Coins, FileText, Home, KeyRound, List, LogOut, Share2, Users } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
@@ -14,6 +14,11 @@ import { cn } from "@/lib/utils";
 const navItems = [
   { href: "/dashboard", label: "Overview", icon: Home },
   { href: "/dashboard/cost", label: "Cost", icon: Coins },
+  // Customers — B2B "is this customer profitable?" lens. Uses the v0.3
+  // customer_id attribution; relies on the SDK caller passing customer_id to
+  // sdk.workflow(). The page surfaces an attribution-coverage banner when
+  // the field isn't being populated.
+  { href: "/dashboard/customers", label: "Customers", icon: Building2 },
   { href: "/dashboard/flow", label: "Flow Map", icon: Share2 },
   { href: "/dashboard/sessions", label: "Sessions", icon: Users },
   // Prompts page surfaces KPI deltas across prompt versions — placed

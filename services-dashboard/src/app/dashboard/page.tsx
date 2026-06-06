@@ -12,6 +12,9 @@ import { FirstRunDashboard } from "@/components/overview/first-run";
 import { useSDKHealth } from "@/lib/queries/use-sdk-health";
 import { OverviewInsights } from "@/components/overview/insights-strip";
 import { RegressionsPanel } from "@/components/overview/regressions-panel";
+import { WasteInbox } from "@/components/overview/waste-inbox";
+import { WorkflowTreemap } from "@/components/overview/workflow-treemap";
+import { CostConfidenceCard } from "@/components/overview/cost-confidence-card";
 import { TopMovers } from "@/components/metrics/top-movers";
 import { VolumeChart } from "@/components/metrics/volume-chart";
 import { CostChart } from "@/components/metrics/cost-chart";
@@ -82,7 +85,12 @@ export default function OverviewPage() {
   if (isFirstRun) {
     return (
       <div className="space-y-4 max-w-3xl mx-auto">
-        <h1 className="text-lg font-semibold">Overview</h1>
+        <div className="flex flex-col gap-0.5">
+          <h1 className="text-lg font-semibold">Overview</h1>
+          <p className="text-xs text-muted-foreground">
+            AI cost across workflows, agents, and customers
+          </p>
+        </div>
         <FirstRunDashboard
           orgId={orgId ?? ""}
           // refetch the SDK health query when the first call is detected;
@@ -98,11 +106,16 @@ export default function OverviewPage() {
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-3">
-          <h1 className="text-lg font-semibold">Overview</h1>
-          <span className="text-xs text-muted-foreground hidden sm:inline">
-            Click any chart bar to drill in · Click a legend item to hide/show that series
-          </span>
+        <div className="flex flex-col gap-0.5">
+          <div className="flex items-center gap-3">
+            <h1 className="text-lg font-semibold">Overview</h1>
+            <span className="text-xs text-muted-foreground hidden sm:inline">
+              Click any chart bar to drill in · Click a legend item to hide/show that series
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            AI cost across workflows, agents, and customers
+          </p>
         </div>
         <div className="flex items-center gap-2">
           {/* Granularity segmented control. Switching to Daily auto-widens to 7d. */}
@@ -158,12 +171,45 @@ export default function OverviewPage() {
         enabled={enabled}
       />
 
+      {/* Waste Inbox — deterministic-rule findings ranked by dollar impact.
+          Hides itself when there's nothing to report (same convention as
+          RegressionsPanel) so a clean org doesn't see noise. */}
+      <WasteInbox
+        orgId={orgId ?? ""}
+        from={range.from}
+        to={range.to}
+        enabled={enabled}
+      />
+
       <StatCards
         data={current.data ?? null}
         prior={priorQ.data ?? null}
         series={metrics.data?.points ?? []}
         isLoading={current.isLoading}
         error={current.error}
+      />
+
+      {/* Workflow cost treemap — the "where is the money going?" anchor for
+          v0.3 cost attribution. Tile area is proportional to cost in the
+          current window; color is the delta vs the equivalent prior window.
+          Click a tile to drill into Traces filtered by that workflow's
+          feature_name. Empty state nudges users to wrap calls in
+          sdk.workflow() so cost gets attributed. */}
+      <WorkflowTreemap
+        orgId={orgId ?? ""}
+        from={range.from}
+        to={range.to}
+        enabled={enabled}
+      />
+
+      {/* Cost confidence — sits directly below the treemap because the
+          natural question after seeing the workflow cost breakdown is
+          "can I trust these numbers?". Hides itself on empty windows. */}
+      <CostConfidenceCard
+        orgId={orgId ?? ""}
+        from={range.from}
+        to={range.to}
+        enabled={enabled}
       />
 
       <TopMovers

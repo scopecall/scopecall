@@ -179,6 +179,17 @@ func main() {
 		// to see a new prompt version's metrics fill in quickly after
 		// deploy.
 		"prompts":           60 * time.Second,
+		// Workflow treemap — workflow rollups for Overview. Same cadence as
+		// other rollup-style endpoints; the data underneath only refreshes
+		// once the processor commits a new ClickHouse batch.
+		"workflow_cost_tree":      60 * time.Second,
+		"workflow_detail":         60 * time.Second,
+		"customer_profitability":  60 * time.Second,
+		// Waste Inbox runs 3 small CH queries — same cadence as the other
+		// rollup endpoints. Stale data here is harmless; the cost-of-waste
+		// changes on the hour, not the second.
+		"waste_inbox":             60 * time.Second,
+		"cost_confidence":         60 * time.Second,
 	}
 
 	// Per-org rate limit: 600 req/min per org_id. Sized for ~10-15 active
@@ -294,6 +305,36 @@ func main() {
 		// turns Top Movers into actionable "this got worse" signals.
 		r.With(apimw.Cache(rdb, cacheTTLs["regressions"], "regressions")).
 			Get("/api/v1/regressions", srv.GetRegressionsHTTP)
+
+		// Workflow cost treemap — workflow-level cost rollup + prior-period
+		// delta. The Overview's primary "where is the money going?" tile.
+		// Attribution is by trace_id ⇒ workflow-span join; see
+		// query/workflow_cost_tree.go for the rationale.
+		r.With(apimw.Cache(rdb, cacheTTLs["workflow_cost_tree"], "workflow_cost_tree")).
+			Get("/api/v1/workflow-cost-tree", srv.GetWorkflowCostTreeHTTP)
+
+		// Workflow detail — drill-in target for treemap tiles. One endpoint
+		// returns summary + 5 breakdowns (agent / step / customer / model /
+		// cost_source) so the detail page loads without staggered states.
+		r.With(apimw.Cache(rdb, cacheTTLs["workflow_detail"], "workflow_detail")).
+			Get("/api/v1/workflow-detail", srv.GetWorkflowDetailHTTP)
+
+		// Customer profitability — per-customer cost rollup for the B2B
+		// "which customers are driving spend?" view. Includes prior-period
+		// delta + waste signals (retry %, test %).
+		r.With(apimw.Cache(rdb, cacheTTLs["customer_profitability"], "customer_profitability")).
+			Get("/api/v1/customer-profitability", srv.GetCustomerProfitabilityHTTP)
+
+		// Waste Inbox — deterministic-rule findings (retry burners, model
+		// misuse, high-error workflows). Surfaced on Overview.
+		r.With(apimw.Cache(rdb, cacheTTLs["waste_inbox"], "waste_inbox")).
+			Get("/api/v1/waste-inbox", srv.GetWasteInboxHTTP)
+
+		// Cost confidence — "how much of your reported cost is server-priced
+		// (verified) vs SDK-fallback / unknown-model (unverifiable)?" + a
+		// punch list of unknown models to add to schemas/pricing/pricing.json.
+		r.With(apimw.Cache(rdb, cacheTTLs["cost_confidence"], "cost_confidence")).
+			Get("/api/v1/cost-confidence", srv.GetCostConfidenceHTTP)
 
 		// Saved views (URL bookmarks). No cache — list is small + writes need
 		// to reflect immediately so the dropdown updates after Save.

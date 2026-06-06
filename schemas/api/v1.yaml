@@ -441,6 +441,62 @@ components:
           items:
             $ref: "#/components/schemas/TopMoverRow"
 
+    WorkflowCostNode:
+      type: object
+      required:
+        [name, current_cost_usd, prior_cost_usd, delta_cost_usd, pct_change,
+         is_new, current_calls, error_count, customer_count, is_test_share]
+      properties:
+        name:
+          type: string
+          description: >
+            Workflow feature_name. Empty string when LLM calls were emitted
+            without an enclosing sdk.workflow() block — the dashboard renders
+            this bucket as "Unattributed".
+        current_cost_usd:
+          type: number
+          format: double
+        prior_cost_usd:
+          type: number
+          format: double
+        delta_cost_usd:
+          type: number
+          format: double
+        pct_change:
+          type: number
+          format: double
+          description: >
+            Same -1 sentinel convention as TopMoverRow: -1 = no prior baseline
+            (use is_new instead).
+        is_new:
+          type: boolean
+        current_calls:
+          type: integer
+        error_count:
+          type: integer
+        customer_count:
+          type: integer
+          description: Distinct non-empty customer_id values in the current window.
+        is_test_share:
+          type: number
+          format: double
+          description: Fraction of current-window LLM rows with is_test=true (0..1).
+
+    WorkflowCostTreeResponse:
+      type: object
+      required: [window_seconds, total_cost_usd, workflows]
+      properties:
+        window_seconds:
+          type: integer
+        total_cost_usd:
+          type: number
+          format: double
+          description: Sum of current_cost_usd across all returned workflows.
+        workflows:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkflowCostNode"
+
     ErrorBucket:
       type: object
       required: [timestamp, error, timeout, rate_limited]
@@ -682,6 +738,15 @@ paths:
             Filter to one prompt version (set via sdk.trace(..., {promptVersion})
             or ScopeCallConfig.defaultPromptVersion). Pass __null__ to show
             untagged calls only — matches the Prompts page's "(untagged)" row.
+        - name: customer_id
+          in: query
+          required: false
+          schema:
+            type: string
+          description: >
+            v0.3 — B2B tenant filter. Drilled into from /dashboard/customers and
+            the workflow-detail by-customer panel. Pass __null__ to show calls
+            with no customer_id (the "Unattributed" tile on the Customers page).
         - name: q
           in: query
           required: false
@@ -922,6 +987,41 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorsByStatusResponse"
+        "400":
+          $ref: "#/components/responses/Problem400"
+        "401":
+          $ref: "#/components/responses/Problem401"
+        "403":
+          $ref: "#/components/responses/Problem403"
+
+  /api/v1/workflow-cost-tree:
+    get:
+      operationId: GetWorkflowCostTree
+      summary: Workflow-level cost rollup with prior-period delta (Overview treemap)
+      description: >
+        Aggregates kind='llm' cost by the feature_name of the kind='workflow'
+        row that roots each trace. Includes the same-sized prior window so the
+        frontend can color tiles by delta. Traces with no workflow span land
+        in the "" bucket (rendered as Unattributed).
+      parameters:
+        - $ref: "#/components/parameters/OrgId"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        "200":
+          description: Workflows ordered by current-window cost descending
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkflowCostTreeResponse"
         "400":
           $ref: "#/components/responses/Problem400"
         "401":

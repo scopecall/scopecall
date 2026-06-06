@@ -123,6 +123,13 @@ function TracesView() {
   const [promptVersion, setPromptVersion] = useState<string | undefined>(
     () => searchParams.get("prompt_version") ?? undefined,
   );
+  // customer_id filter — same chip-only pattern as prompt_version. Drill-in
+  // target from /dashboard/customers and the workflow-detail by-customer
+  // panel. No dropdown because customer cardinality scales with the user's
+  // tenant count — a dropdown would either be empty or unbounded.
+  const [customerId, setCustomerId] = useState<string | undefined>(
+    () => searchParams.get("customer_id") ?? undefined,
+  );
   // Local input state for the user_id text field — committed on Enter/blur so we
   // don't refetch on every keystroke.
   const [userInput, setUserInput] = useState<string>(userId ?? "");
@@ -178,6 +185,7 @@ function TracesView() {
       userId,
       environment,
       promptVersion,
+      customerId,
       q: searchCommitted,
       // Polling only kicks in when both: user opted in AND the range is "live".
       // No cursor when live — always show the latest page.
@@ -190,7 +198,7 @@ function TracesView() {
   useApiError(query.error, query.refetch);
 
   // Reset selection when page/filter/range/search changes
-  useEffect(() => { setSelectedIdx(-1); }, [cursor, status, range, model, featureName, provider, environment, userId, promptVersion, searchCommitted]);
+  useEffect(() => { setSelectedIdx(-1); }, [cursor, status, range, model, featureName, provider, environment, userId, promptVersion, customerId, searchCommitted]);
 
   // Sync filter state to URL so any view is shareable / bookmarkable.
   // router.replace (not push) — filter tweaks shouldn't pile up in history.
@@ -204,6 +212,7 @@ function TracesView() {
     if (environment)     sp.set("environment", environment);
     if (userId)          sp.set("user_id", userId);
     if (promptVersion)   sp.set("prompt_version", promptVersion);
+    if (customerId)      sp.set("customer_id", customerId);
     if (searchCommitted) sp.set("q", searchCommitted);
     // Persist range too so the URL fully reproduces the view. Drill-in
     // callers pass ISO 8601 — we round-trip the same format. We always
@@ -217,7 +226,7 @@ function TracesView() {
     if (next !== current) {
       router.replace(next ? `?${next}` : "/dashboard/traces", { scroll: false });
     }
-  }, [status, model, provider, featureName, environment, userId, promptVersion, searchCommitted, range, router, searchParams]);
+  }, [status, model, provider, featureName, environment, userId, promptVersion, customerId, searchCommitted, range, router, searchParams]);
 
   // "/" focuses the search input (skipping when already in an input/textarea).
   useEffect(() => {
@@ -317,10 +326,10 @@ function TracesView() {
     setCursor(undefined);
   }
 
-  const anyFilterActive = !!(status || model || featureName || provider || environment || userId || promptVersion || searchCommitted);
+  const anyFilterActive = !!(status || model || featureName || provider || environment || userId || promptVersion || customerId || searchCommitted);
   // Count for the mobile "Filters" button badge. Excludes search since search
   // has its own always-visible input above the toolbar.
-  const activeFilterCount = [status, model, featureName, provider, environment, userId, promptVersion]
+  const activeFilterCount = [status, model, featureName, provider, environment, userId, promptVersion, customerId]
     .filter(Boolean).length;
 
   function clearAllFilters() {
@@ -332,6 +341,7 @@ function TracesView() {
     setUserId(undefined);
     setUserInput("");
     setPromptVersion(undefined);
+    setCustomerId(undefined);
     setSearchInput("");
     setSearchCommitted(undefined);
     setCursorStack([]);
@@ -479,6 +489,26 @@ function TracesView() {
           </button>
         )}
       </div>
+
+      {/* Customer-id chip — same chip-only pattern as prompt_version (no
+          dropdown because customer cardinality scales with tenant count).
+          Renders when the URL carries ?customer_id=…, set via drill-in
+          from /dashboard/customers or the workflow detail by-customer panel. */}
+      {customerId && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-md border border-brand/30 bg-brand/10 text-xs">
+          <span className="text-muted-foreground">Customer:</span>
+          <span className="font-mono text-foreground">
+            {customerId === "__null__" ? "(unattributed)" : customerId}
+          </span>
+          <button
+            onClick={() => setCustomerId(undefined)}
+            className="ml-auto text-muted-foreground hover:text-foreground underline underline-offset-2"
+            aria-label="Clear customer filter"
+          >
+            Clear
+          </button>
+        </div>
+      )}
 
       {/* Prompt-version chip — only renders when the URL carries
           ?prompt_version=… (e.g. arriving via drill-in from the Prompts page).

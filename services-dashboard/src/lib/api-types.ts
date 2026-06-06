@@ -174,6 +174,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workflow-cost-tree": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Workflow-level cost rollup with prior-period delta (Overview treemap)
+         * @description Aggregates kind='llm' cost by the feature_name of the kind='workflow' row that roots each trace. Includes the same-sized prior window so the frontend can color tiles by delta. Traces with no workflow span land in the "" bucket (rendered as Unattributed).
+         */
+        get: operations["GetWorkflowCostTree"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sessions": {
         parameters: {
             query?: never;
@@ -307,16 +327,39 @@ export interface components {
             feature_name?: string | null;
             user_id?: string | null;
             session_id?: string | null;
+            /** @description B2B customer / tenant identifier (distinct from user_id, which is the end-user). Powers per-customer cost attribution. (v0.3) */
+            customer_id?: string | null;
             environment: string;
             sdk_version?: string | null;
             extra?: string | null;
             /** @description Operator-supplied prompt iteration label. Set via sdk.trace(name, fn, { promptVersion }) or via ScopeCallConfig.defaultPromptVersion. Powers the Prompts page. */
             prompt_version?: string | null;
             /**
-             * @description Span discriminator. `llm` is an instrumented provider call (the default). `workflow` is the synthetic span emitted by sdk.trace() so the trace tree has a real parent row. Workflow rows have empty model/provider, zero tokens, zero cost — see schemas/clickhouse/004_span_kind.sql.
+             * @description Span kind. `llm` = an instrumented provider call; the other three are container spans (no model/tokens/cost of their own) that aggregate cost from their LLM descendants. workflow → agent → step is the conventional hierarchy but nesting is not enforced. (v0.3)
              * @enum {string}
              */
-            kind?: "llm" | "workflow";
+            kind?: "llm" | "workflow" | "agent" | "step";
+            /** @description 1-based caller-attempt index. Increments only when the application retries (not provider-SDK-internal retries). Default 1. (v0.3) */
+            attempt_number?: number;
+            /**
+             * @description Reason for this retry; null on attempt 1. (v0.3)
+             * @enum {string|null}
+             */
+            retry_reason?: "rate_limit" | "timeout" | "server_error" | "transient_network" | "agent_decision" | "manual" | "unknown" | null;
+            /** @description True for non-production traffic (eval, CI, smoke tests, replays, backfills). The dashboard's "Production only" toggle filters by this. (v0.3) */
+            is_test?: boolean;
+            /**
+             * Format: double
+             * @description Cost of the cached input-token portion. Server-derived from the pricing table; 0 when the model has no cache_read rate or no cached tokens were read. (v0.3)
+             */
+            cache_read_cost_usd?: number;
+            /**
+             * @description Trust signal for cost_usd. server_computed = priced from the pricing table; sdk_fallback = SDK-supplied because the model was unknown; unknown_model = no cost data available; container = synthetic span (workflow / agent / step) that has no model of its own. (v0.3)
+             * @enum {string}
+             */
+            cost_source?: "server_computed" | "sdk_fallback" | "unknown_model" | "container";
+            /** @description Pricing-table version that produced cost_usd (YYYY-MM-DD verification date). (v0.3) */
+            pricing_version?: string | null;
         };
         TraceListResponse: {
             traces: components["schemas"]["Trace"][];
@@ -400,6 +443,40 @@ export interface components {
             group_by: string;
             window_seconds: number;
             rows: components["schemas"]["TopMoverRow"][];
+        };
+        WorkflowCostNode: {
+            /** @description Workflow feature_name. Empty string when LLM calls were emitted without an enclosing sdk.workflow() block — the dashboard renders this bucket as "Unattributed". */
+            name: string;
+            /** Format: double */
+            current_cost_usd: number;
+            /** Format: double */
+            prior_cost_usd: number;
+            /** Format: double */
+            delta_cost_usd: number;
+            /**
+             * Format: double
+             * @description Same -1 sentinel convention as TopMoverRow: -1 = no prior baseline (use is_new instead).
+             */
+            pct_change: number;
+            is_new: boolean;
+            current_calls: number;
+            error_count: number;
+            /** @description Distinct non-empty customer_id values in the current window. */
+            customer_count: number;
+            /**
+             * Format: double
+             * @description Fraction of current-window LLM rows with is_test=true (0..1).
+             */
+            is_test_share: number;
+        };
+        WorkflowCostTreeResponse: {
+            window_seconds: number;
+            /**
+             * Format: double
+             * @description Sum of current_cost_usd across all returned workflows.
+             */
+            total_cost_usd: number;
+            workflows: components["schemas"]["WorkflowCostNode"][];
         };
         ErrorBucket: {
             /** Format: date-time */
@@ -559,6 +636,8 @@ export interface operations {
                 environment?: string;
                 /** @description Filter to one prompt version (set via sdk.trace(..., {promptVersion}) or ScopeCallConfig.defaultPromptVersion). Pass __null__ to show untagged calls only — matches the Prompts page's "(untagged)" row. */
                 prompt_version?: string;
+                /** @description v0.3 — B2B tenant filter. Drilled into from /dashboard/customers and the workflow-detail by-customer panel. Pass __null__ to show calls with no customer_id (the "Unattributed" tile on the Customers page). */
+                customer_id?: string;
                 /** @description Free-text search. Exact-match on span_id / trace_id / session_id / user_id; case-insensitive substring on input_text / output_text / error_message (text-column matching skipped for viewer role). */
                 q?: string;
             };
@@ -823,6 +902,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorsByStatusResponse"];
+                };
+            };
+            400: components["responses"]["Problem400"];
+            401: components["responses"]["Problem401"];
+            403: components["responses"]["Problem403"];
+        };
+    };
+    GetWorkflowCostTree: {
+        parameters: {
+            query: {
+                /** @description Organization ID. Must match the org_id in the authenticated token. */
+                org_id: components["parameters"]["OrgId"];
+                /** @description Absolute ISO8601 timestamp (e.g. 2026-05-01T00:00:00Z). Relative values (now-24h) are rejected with 400. */
+                from: components["parameters"]["From"];
+                /** @description Absolute ISO8601 timestamp (e.g. 2026-05-22T00:00:00Z). Must be after 'from'. */
+                to: components["parameters"]["To"];
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Workflows ordered by current-window cost descending */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowCostTreeResponse"];
                 };
             };
             400: components["responses"]["Problem400"];

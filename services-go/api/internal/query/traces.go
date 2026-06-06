@@ -81,6 +81,10 @@ type ListTracesArgs struct {
 	// dimensions so the Prompts page's "(none)" row can drill into untagged
 	// calls.
 	PromptVersion string
+	// v0.3 — B2B tenant filter. Drilled into from /dashboard/customers + the
+	// workflow detail by-customer panel. Supports nullSentinel to surface
+	// calls with no customer_id (the "Unattributed" tile on the customers page).
+	CustomerID    string
 	// Free-text search: exact-match on ID columns, plus case-insensitive
 	// substring on input/output/error text. Text columns are excluded from
 	// the search when IsOwner is false — otherwise a viewer could deduce
@@ -176,6 +180,7 @@ func ListTraces(ctx context.Context, ch driver.Conn, args ListTracesArgs) (*List
 		{"user_id", "user_id", args.UserID},
 		{"environment", "environment", args.Environment},
 		{"prompt_version", "prompt_version", args.PromptVersion},
+		{"customer_id", "customer_id", args.CustomerID},
 	}
 	for _, f := range filters {
 		if f.val == "" {

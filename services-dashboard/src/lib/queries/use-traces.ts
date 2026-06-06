@@ -19,6 +19,9 @@ interface TracesParams {
   q?: string;
   /** Filter to one prompt version. Pass "__null__" for untagged calls. */
   promptVersion?: string;
+  /** v0.3 — B2B tenant filter. Drilled into from /dashboard/customers and
+   *  the workflow-detail by-customer panel. */
+  customerId?: string;
   /** When set, the query refetches at this interval (ms). For live-tail. */
   refetchIntervalMs?: number;
 }
@@ -39,6 +42,7 @@ export function useTraces(params: TracesParams, enabled = true) {
       params.environment,
       params.q,
       params.promptVersion,
+      params.customerId,
     ],
     queryFn: async () => {
       const token = await auth.getAccessToken();
@@ -61,6 +65,7 @@ export function useTraces(params: TracesParams, enabled = true) {
             environment: params.environment,
             q: params.q,
             prompt_version: params.promptVersion,
+            customer_id: params.customerId,
           },
         },
       });

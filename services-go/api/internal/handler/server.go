@@ -87,6 +87,7 @@ func (s *Server) ListTraces(ctx context.Context, req gen.ListTracesRequestObject
 	args.FeatureName = ctxStr(ctx, keyFeatureName)
 	args.Query = ctxStr(ctx, keyQuery)
 	args.PromptVersion = ctxStr(ctx, keyPromptVersion)
+	args.CustomerID = ctxStr(ctx, keyCustomerID)
 
 	res, err := query.ListTraces(ctx, s.CH, args)
 	if err != nil {

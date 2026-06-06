@@ -22,6 +22,10 @@ const (
 	keyFeatureName
 	keyQuery
 	keyPromptVersion
+	// v0.3 — B2B tenant filter. Drilled into from /dashboard/customers and
+	// from the workflow-detail page's by-customer breakdown. Distinct from
+	// user_id (the end-user of the customer's app).
+	keyCustomerID
 )
 
 // WithTraceFilters reads provider/user_id/environment/feature_name from the
@@ -47,6 +51,9 @@ func WithTraceFilters(r *http.Request) context.Context {
 	}
 	if v := q.Get("prompt_version"); v != "" {
 		ctx = context.WithValue(ctx, keyPromptVersion, v)
+	}
+	if v := q.Get("customer_id"); v != "" {
+		ctx = context.WithValue(ctx, keyCustomerID, v)
 	}
 	return ctx
 }
