@@ -394,6 +394,7 @@ more naturally.
 ## FastAPI
 
 ```python
+import os
 from contextlib import asynccontextmanager
 
 import scopecall
@@ -425,9 +426,11 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 
+# `ChatRequest` is a small pydantic BaseModel (user_id, session_id, messages).
+# See the runnable examples/fastapi/app.py for the full definition.
 @app.post("/chat")
 async def chat(req: ChatRequest):
-    with sdk.trace("chat-api", user_id=req.user_id, session_id=req.session_id):
+    with sdk.workflow("chat-api", user_id=req.user_id, session_id=req.session_id):
         response = await client.chat.completions.create(
             model="gpt-4o-mini",
             messages=req.messages,

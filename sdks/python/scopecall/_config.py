@@ -1,8 +1,16 @@
 """SDK configuration.
 
-Matches the TS SDK's `ScopeCallConfig` shape (sdks/typescript/src/config.ts)
-field-for-field where it makes sense. Naming follows Python conventions
-(`snake_case`, `bool` defaults) — the field set itself is parity.
+Mirrors the TS SDK's `ScopeCallConfig` (sdks/typescript/src/config.ts) in
+intent and for most fields, with Python-native naming (`snake_case`, `bool`
+defaults). It is NOT field-for-field identical — known divergences:
+
+  - `redact_pii` (bool) here vs TS `redact` (bool | {additionalPatterns}).
+    Custom redaction patterns are runtime-only in Python — add them via
+    `sdk.add_redaction_pattern(name, regex, replacement=...)` — whereas TS
+    takes them at config time via `redact.additionalPatterns`.
+  - `flush_interval` is seconds here; TS `flushIntervalMs` is milliseconds.
+  - Transport plumbing (`transport`, `logger`, `baseDelayMs`) is TS-only;
+    Python's thread + httpx exporter doesn't expose those knobs.
 
 `endpoint` is required when `api_key` is set: a missing endpoint used to
 silently default to https://ingest.scopecall.com/v1/ingest which doesn't

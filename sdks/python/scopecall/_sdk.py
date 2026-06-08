@@ -336,7 +336,7 @@ class ScopeCallSDK:
     # Why keep this in source at all (vs delete in v0.2.0): there may
     # already be early-access callers who imported it before the
     # publish. Removing it would be a hard break. We'll fully remove
-    # in v0.3.0 once we can confirm no external usage; until then
+    # in v0.4.0 once we can confirm no external usage; until then
     # this method exists, isn't documented, and emits a runtime
     # warning on first call.
 
@@ -358,7 +358,7 @@ class ScopeCallSDK:
         every nested `trace()` emits a real workflow row and the
         parent chain stays intact.
 
-        Scheduled for removal in v0.3.0.
+        Scheduled for removal in v0.4.0.
         """
         if not type(self)._span_warned:
             type(self)._span_warned = True
@@ -369,7 +369,7 @@ class ScopeCallSDK:
                 "events in the dashboard's trace tree — children "
                 "reference a span_id that has no persisted row. Use "
                 "nested sdk.trace(name) blocks instead. "
-                "sdk.span() will be removed in v0.3.0.",
+                "sdk.span() will be removed in v0.4.0.",
                 DeprecationWarning,
                 stacklevel=2,
             )
