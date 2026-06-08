@@ -237,7 +237,11 @@ async fn flush(
     let events: Vec<EnrichedEvent> = buf.drain(..).map(|p| p.event).collect();
     let count = events.len();
 
-    match writer.insert_batch(events.clone()).await {
+    // Borrow the batch for the happy-path insert — no clone. We keep
+    // ownership of `events` so the error arm can consume it into per-event
+    // retry without having pre-cloned the whole batch (≤1000 events, each up
+    // to ~128 KB of text) on every flush just to insure the rare failure.
+    match writer.insert_batch(&events).await {
         Ok(()) => {
             tracing::info!(count, max_offset, "batch written to ClickHouse");
         }
@@ -250,7 +254,7 @@ async fn flush(
             // Per-event retry + DLQ. We re-issue single-row inserts here
             // because one poison row can fail a multi-row batch (rare with
             // RMT but possible: e.g. malformed JSON in a JSONString
-            // column). Splitting isolates the failure.
+            // column). Splitting isolates the failure. Consumes `events`.
             for ev in events {
                 write_with_retry(ev, writer, dlq, source_topic, MAX_WRITE_ATTEMPTS).await;
             }

@@ -102,7 +102,7 @@ impl FailingWriter {
         )
     }
 
-    async fn insert_batch(&self, _: Vec<EnrichedEvent>) -> anyhow::Result<()> {
+    async fn insert_batch(&self, _: &[EnrichedEvent]) -> anyhow::Result<()> {
         *self.attempt_count.lock().unwrap() += 1;
         Err(anyhow::anyhow!("simulated ClickHouse failure"))
     }
@@ -148,7 +148,7 @@ async fn dlq_retry_exhaustion_no_docker() {
     // because it takes concrete types, so we replicate the logic here.)
     let mut last_error = String::new();
     for attempt in 1..=MAX_ATTEMPTS {
-        match failing_writer.insert_batch(vec![event.clone()]).await {
+        match failing_writer.insert_batch(std::slice::from_ref(&event)).await {
             Ok(()) => break,
             Err(e) => {
                 last_error = e.to_string();
@@ -298,7 +298,7 @@ async fn ch_writer_roundtrip() {
 
     let event = make_test_event("trace-ch-roundtrip");
     writer
-        .insert_batch(vec![event])
+        .insert_batch(std::slice::from_ref(&event))
         .await
         .expect("insert_batch failed");
 

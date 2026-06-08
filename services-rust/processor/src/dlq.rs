@@ -116,7 +116,10 @@ pub async fn write_with_retry(
     let base_backoff_ms: u64 = 1_000;
 
     for attempt in 1..=max_attempts {
-        match writer.insert_batch(vec![event.clone()]).await {
+        // Borrow `event` for each attempt (std::slice::from_ref → a 1-element
+        // slice) instead of cloning it into a fresh Vec every retry. `event`
+        // stays owned so it can move into the DlqEnvelope on exhaustion.
+        match writer.insert_batch(std::slice::from_ref(&event)).await {
             Ok(()) => {
                 tracing::info!(attempt, "row written to ClickHouse");
                 return;
