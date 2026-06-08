@@ -27,6 +27,13 @@
 //! `(org_id, timestamp, span_id)`) collapses them at merge time. Idempotent
 //! by data shape, not by transactional write path.
 //!
+//! This holds for the raw `llm_calls` table only. The `llm_metrics_hourly`
+//! rollup's additive columns DO sum a replayed batch (the materialized view
+//! is not on the dedup path), so it is kept correct by a periodic
+//! reconcile-from-raw rather than by this offset contract — see
+//! `scripts/reconcile-llm-metrics-hourly.sh` and the Idempotency note on
+//! `consumer::flush`.
+//!
 //! ## Non-goals
 //!
 //! - Multi-partition support. The processor currently consumes partition 0

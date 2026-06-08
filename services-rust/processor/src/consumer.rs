@@ -190,11 +190,24 @@ pub async fn run_consumer_loop(
 /// `ORDER BY (org_id, timestamp, span_id)`. Duplicate `(span_id, timestamp)`
 /// rows produced by a crash-after-write-before-offset-save are merged into
 /// one row at the next part merge. Querying with `FINAL` (or relying on
-/// the merge) makes replays invisible to consumers. This is what makes
-/// at-least-once delivery safe without a transactional offset commit.
+/// the merge) makes replays invisible to consumers of the RAW table. This is
+/// what makes at-least-once delivery safe without a transactional offset
+/// commit.
 ///
 /// The instant we accept this contract, we are free to NOT fsync the
 /// offset file and to ack-after-success-only. Both choices are deliberate.
+///
+/// ### Caveat: the `llm_metrics_hourly` rollup is NOT replay-idempotent
+///
+/// `llm_calls_to_metrics_mv` fires once per INSERT and emits a partial-
+/// aggregate row into `llm_metrics_hourly`, whose additive columns are
+/// `SimpleAggregateFunction(sum, …)`. On a replay, RMT collapses the raw
+/// rows but the MV runs again and its sum-columns add the replayed batch on
+/// top of the original — so a crash-replay OVER-counts the rollup (raw stays
+/// correct). The rollup is deliberately not on the exactly-once path; it is
+/// fully reconstructable from RMT-deduped raw, and a periodic
+/// rebuild-from-raw heals any drift. See
+/// `scripts/reconcile-llm-metrics-hourly.sh`.
 async fn flush(
     buf: &mut Vec<Pending>,
     writer: &ClickHouseWriter,

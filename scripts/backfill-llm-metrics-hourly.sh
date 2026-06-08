@@ -23,6 +23,15 @@
 # - On any environment that ran ScopeCall pre-migration-005.
 # - Skip on fresh installs: the new MV is correct from the first event.
 #
+# One-time only — NOT a periodic job
+# ----------------------------------
+# This script swaps with RENAME … TO llm_metrics_hourly_old, which collides
+# on a second run (the _old table already exists), so it is not safe to
+# re-run or schedule. For ongoing correctness — healing the rollup over-count
+# that an at-least-once processor replay introduces — use
+# scripts/reconcile-llm-metrics-hourly.sh, which reads llm_calls FINAL, swaps
+# with EXCHANGE, leaves no _old table, and is idempotent.
+#
 # Safety
 # ------
 # - Reads CH_HOST env var; defaults to `clickhouse` (the compose service name).
