@@ -281,7 +281,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Calls grouped by session_id, sorted by recency */
+        /**
+         * Calls grouped by session_id, sorted by recency
+         * @description The cross-cutting facets (model / status / feature_name / provider / environment) use "match → whole session" semantics: a session is returned if AT LEAST ONE of its calls satisfies every supplied filter, but the per-session aggregates (call_count, total_cost_usd, error_count, duration) still span the whole session — not just the matching calls. Implemented as a session_id membership subquery so totals stay real. These mirror the same-named /api/v1/traces filters; user_id additionally scopes to a single end-user.
+         */
         get: operations["ListSessions"];
         put?: never;
         post?: never;
@@ -440,6 +443,12 @@ export interface components {
             cost_source?: "server_computed" | "sdk_fallback" | "unknown_model" | "container";
             /** @description Pricing-table version that produced cost_usd (YYYY-MM-DD verification date). (v0.3) */
             pricing_version?: string | null;
+            /** @description Name of the workflow span that wraps this call, resolved on READ by walking parent_span_id up to the kind='workflow' ancestor (the container span is persisted by sdk.workflow()/sdk.trace()). Absent when the call isn't inside a workflow. Powers the Traces-list breadcrumb (workflow › agent › step › model). Resolving on read means older calls get the breadcrumb with no SDK change or backfill. (v0.3) */
+            workflow?: string | null;
+            /** @description Name of the agent span ancestor (kind='agent'), resolved the same way as `workflow`. Absent when no agent wraps the call. (v0.3) */
+            agent?: string | null;
+            /** @description Name of the step span ancestor (kind='step'), the nearest container above the LLM call. Resolved the same way as `workflow`. Absent when the call isn't inside a step. (v0.3) */
+            step?: string | null;
         };
         TraceListResponse: {
             traces: components["schemas"]["Trace"][];
@@ -802,8 +811,8 @@ export interface components {
         /** @description Absolute ISO8601 timestamp (e.g. 2026-05-22T00:00:00Z). Must be after 'from'. */
         To: string;
         Granularity: "hour" | "day";
-        /** @description Dimension to aggregate cost and calls by. model/provider/feature read the pre-aggregated hourly rollup; user/environment scan raw calls over the window. */
-        GroupBy: "model" | "provider" | "feature" | "user" | "environment";
+        /** @description Dimension to aggregate cost and calls by. model/provider/feature read the pre-aggregated hourly rollup; user/customer/environment scan raw calls over the window. customer groups by the B2B tenant (customer_id) — distinct from user (the end-user). */
+        GroupBy: "model" | "provider" | "feature" | "user" | "customer" | "environment";
     };
     requestBodies: never;
     headers: never;
@@ -1049,10 +1058,10 @@ export interface operations {
                 from: components["parameters"]["From"];
                 /** @description Absolute ISO8601 timestamp (e.g. 2026-05-22T00:00:00Z). Must be after 'from'. */
                 to: components["parameters"]["To"];
-                /** @description Dimension to aggregate cost and calls by. model/provider/feature read the pre-aggregated hourly rollup; user/environment scan raw calls over the window. */
+                /** @description Dimension to aggregate cost and calls by. model/provider/feature read the pre-aggregated hourly rollup; user/customer/environment scan raw calls over the window. customer groups by the B2B tenant (customer_id) — distinct from user (the end-user). */
                 group_by?: components["parameters"]["GroupBy"];
-                /** @description When set, cross-dimensional mode — returns one row per (group_by × secondary_group_by) combination. Always reads raw llm_calls (rollup lacks user/env columns). */
-                secondary_group_by?: "model" | "provider" | "feature" | "user" | "environment";
+                /** @description When set, cross-dimensional mode — returns one row per (group_by × secondary_group_by) combination. Always reads raw llm_calls (rollup lacks user/customer/env columns). */
+                secondary_group_by?: "model" | "provider" | "feature" | "user" | "customer" | "environment";
                 /** @description Max groups to return (sorted by cost descending). */
                 limit?: number;
             };
@@ -1085,7 +1094,7 @@ export interface operations {
                 from: components["parameters"]["From"];
                 /** @description Absolute ISO8601 timestamp (e.g. 2026-05-22T00:00:00Z). Must be after 'from'. */
                 to: components["parameters"]["To"];
-                /** @description Dimension to aggregate cost and calls by. model/provider/feature read the pre-aggregated hourly rollup; user/environment scan raw calls over the window. */
+                /** @description Dimension to aggregate cost and calls by. model/provider/feature read the pre-aggregated hourly rollup; user/customer/environment scan raw calls over the window. customer groups by the B2B tenant (customer_id) — distinct from user (the end-user). */
                 group_by?: components["parameters"]["GroupBy"];
                 limit?: number;
             };
@@ -1305,6 +1314,16 @@ export interface operations {
                 to: components["parameters"]["To"];
                 /** @description Scope to a single end-user. Equivalent to a server-side filter. */
                 user_id?: string;
+                /** @description Match sessions with at least one call on this model. */
+                model?: string;
+                /** @description Match sessions with at least one call in this status. */
+                status?: "success" | "error" | "timeout" | "rate_limited";
+                /** @description Match sessions touching this feature. Pass __null__ to match sessions with at least one untagged call. */
+                feature_name?: string;
+                /** @description Match sessions with at least one call on this provider. */
+                provider?: string;
+                /** @description Match sessions with at least one call in this environment. */
+                environment?: string;
                 limit?: number;
             };
             header?: never;

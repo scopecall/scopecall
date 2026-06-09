@@ -9,6 +9,7 @@ export type BreakdownDimension =
   | "provider"
   | "feature"
   | "user"
+  | "customer"
   | "environment";
 
 interface BreakdownParams {

@@ -59,7 +59,26 @@ func (s *Server) GetSessionsHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	rows, err := query.ListSessions(r.Context(), s.CH, claims.OrgID, query.TimeWindow{From: from, To: to}, userID, limit)
+	// Cross-cutting facets — mirror /traces. A session matches when ≥1 of its
+	// calls satisfies these; per-session totals stay full-session (see
+	// query.SessionFilters).
+	filters := query.SessionFilters{
+		Model:       q.Get("model"),
+		Provider:    q.Get("provider"),
+		Status:      q.Get("status"),
+		FeatureName: q.Get("feature_name"),
+		Environment: q.Get("environment"),
+	}
+	if filters.Status != "" {
+		switch filters.Status {
+		case "success", "error", "timeout", "rate_limited":
+		default:
+			problem.Write(w, http.StatusBadRequest, "Bad Request", "'status' must be one of success, error, timeout, rate_limited")
+			return
+		}
+	}
+
+	rows, err := query.ListSessions(r.Context(), s.CH, claims.OrgID, query.TimeWindow{From: from, To: to}, userID, filters, limit)
 	if err != nil {
 		problem.Write(w, http.StatusInternalServerError, "Internal Server Error", "sessions query failed")
 		return

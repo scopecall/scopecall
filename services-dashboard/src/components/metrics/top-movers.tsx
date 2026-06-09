@@ -30,6 +30,7 @@ function dimUrlParam(dim: BreakdownDimension, key: string): string | null {
     case "feature":     return `feature_name=${encodeURIComponent(key)}`;
     case "provider":    return `provider=${encodeURIComponent(key)}`;
     case "user":        return `user_id=${encodeURIComponent(key)}`;
+    case "customer":    return `customer_id=${encodeURIComponent(key)}`;
     case "environment": return `environment=${encodeURIComponent(key)}`;
   }
 }

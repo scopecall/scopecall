@@ -9,6 +9,14 @@ interface SessionsParams {
   from: Date;
   to: Date;
   userId?: string;
+  /** Cross-cutting facets — a session matches if ≥1 of its calls matches, but
+   *  its totals stay full-session ("match → whole session"). Mirrors /traces. */
+  model?: string;
+  provider?: string;
+  status?: "success" | "error" | "timeout" | "rate_limited";
+  /** Pass "__null__" to match sessions with an untagged call. */
+  featureName?: string;
+  environment?: string;
   limit?: number;
 }
 
@@ -20,6 +28,11 @@ export function useSessions(params: SessionsParams, enabled = true) {
       params.from.toISOString(),
       params.to.toISOString(),
       params.userId,
+      params.model,
+      params.provider,
+      params.status,
+      params.featureName,
+      params.environment,
       params.limit,
     ],
     queryFn: async () => {
@@ -33,6 +46,11 @@ export function useSessions(params: SessionsParams, enabled = true) {
             from: params.from.toISOString(),
             to: params.to.toISOString(),
             user_id: params.userId,
+            model: params.model,
+            provider: params.provider,
+            status: params.status,
+            feature_name: params.featureName,
+            environment: params.environment,
             limit: params.limit,
           },
         },

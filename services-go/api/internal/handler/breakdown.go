@@ -34,7 +34,7 @@ type breakdownResponseJSON struct {
 }
 
 var validGroupBy = map[string]bool{
-	"model": true, "provider": true, "feature": true, "user": true, "environment": true,
+	"model": true, "provider": true, "feature": true, "user": true, "customer": true, "environment": true,
 }
 
 // GetBreakdownHTTP serves GET /api/v1/breakdown — cost & call aggregation grouped
@@ -73,13 +73,13 @@ func (s *Server) GetBreakdownHTTP(w http.ResponseWriter, r *http.Request) {
 		groupBy = "model"
 	}
 	if !validGroupBy[groupBy] {
-		problem.Write(w, http.StatusBadRequest, "Bad Request", "invalid group_by; allowed: model, provider, feature, user, environment")
+		problem.Write(w, http.StatusBadRequest, "Bad Request", "invalid group_by; allowed: model, provider, feature, user, customer, environment")
 		return
 	}
 
 	secondary := q.Get("secondary_group_by")
 	if secondary != "" && !validGroupBy[secondary] {
-		problem.Write(w, http.StatusBadRequest, "Bad Request", "invalid secondary_group_by; allowed: model, provider, feature, user, environment")
+		problem.Write(w, http.StatusBadRequest, "Bad Request", "invalid secondary_group_by; allowed: model, provider, feature, user, customer, environment")
 		return
 	}
 	if secondary != "" && secondary == groupBy {

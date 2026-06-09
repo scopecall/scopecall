@@ -189,10 +189,20 @@ type Trace struct {
 	CacheReadCostUsd *float64 `json:"cache_read_cost_usd,omitempty"`
 	CostSource       *string  `json:"cost_source,omitempty"`
 	PricingVersion   *string  `json:"pricing_version,omitempty"`
-	Environment      string   `json:"environment"`
-	ErrorMessage     *string  `json:"error_message,omitempty"`
-	Extra            *string  `json:"extra,omitempty"`
-	FeatureName      *string  `json:"feature_name,omitempty"`
+	// Workflow / Agent / Step: the resolved breadcrumb ancestry for this LLM
+	// call, walked server-side from its parent_span_id chain (the container
+	// spans are persisted by sdk.workflow()/agent()/step()). Each is omitted
+	// when no such ancestor wraps the call, so the dashboard renders a shorter
+	// breadcrumb. Hand-added for the same reason as the fields above (full
+	// regen would explode the error-response types). Keep in sync with
+	// schemas/api/v1.yaml.
+	Workflow     *string `json:"workflow,omitempty"`
+	Agent        *string `json:"agent,omitempty"`
+	Step         *string `json:"step,omitempty"`
+	Environment  string  `json:"environment"`
+	ErrorMessage *string `json:"error_message,omitempty"`
+	Extra        *string `json:"extra,omitempty"`
+	FeatureName  *string `json:"feature_name,omitempty"`
 
 	// InputText Empty string for viewer role
 	InputText   *string `json:"input_text,omitempty"`

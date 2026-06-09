@@ -63,6 +63,14 @@ type TraceRow struct {
 	CacheReadCostUSD float64
 	CostSource       string
 	PricingVersion   *string
+	// v0.3 — breadcrumb ancestry resolved on READ (not stored on the row).
+	// Populated by resolveHierarchyPaths after the page is fetched: each LLM
+	// row's parent_span_id chain is walked through the trace's container
+	// spans (kind workflow/agent/step), filling the corresponding name. Empty
+	// when no such ancestor exists. Drives the Traces-list path breadcrumb.
+	Workflow string
+	Agent    string
+	Step     string
 }
 
 type ListTracesArgs struct {
@@ -361,6 +369,14 @@ LIMIT %d
 		res.NextCursor = encodeCursor(last.Timestamp, last.SpanID)
 		traces = traces[:limit]
 	}
+
+	// Resolve the workflow › agent › step breadcrumb for the rows we're about
+	// to return (after the page trim, so we don't waste a lookup on the
+	// over-fetched +1 sentinel row).
+	if err := resolveHierarchyPaths(ctx, ch, args.OrgID, args.Window, traces); err != nil {
+		return nil, err
+	}
+
 	res.Traces = traces
 	return res, nil
 }
@@ -514,4 +530,122 @@ func hierarchyFilterClauses(args ListTracesArgs) ([]string, []driver.NamedValue)
 		qa = append(qa, driver.NamedValue{Name: "ag_name", Value: args.Agent})
 	}
 	return conds, qa
+}
+
+// containerSpan is the minimal projection of a workflow/agent/step span needed
+// to resolve an LLM row's breadcrumb. ParentSpanID lets the walk climb to the
+// next ancestor; Kind selects which breadcrumb slot Name fills.
+type containerSpan struct {
+	ParentSpanID *string
+	Kind         string
+	Name         string
+}
+
+// resolveHierarchyPaths fills the Workflow/Agent/Step breadcrumb on every LLM
+// row in `traces`. It fetches the container spans (kind workflow/agent/step)
+// for the page's trace_ids in ONE extra query, then walks each row's
+// parent_span_id chain in memory (assignHierarchyPaths).
+//
+// Why resolve on read instead of denormalizing the names onto each LLM row at
+// ingest: the container spans already exist (sdk.workflow()/agent()/step()
+// persist them with a real span_id + parent link), so walking them on read
+// gives the breadcrumb to ALL historical data with no SDK change, migration,
+// or backfill. The cost is one bounded query per page — the container-span set
+// for ≤1000 traces is tiny and scoped by trace_id.
+func resolveHierarchyPaths(ctx context.Context, ch driver.Conn, orgID string, tw TimeWindow, traces []TraceRow) error {
+	if len(traces) == 0 {
+		return nil
+	}
+
+	traceIDs := make([]string, 0, len(traces))
+	for i := range traces {
+		traceIDs = append(traceIDs, traces[i].TraceID)
+	}
+	// quotedINList dedups + escapes (span/trace ids are ingest-supplied, so
+	// this is the injection boundary — same helper the graph-expand path uses).
+	inList := quotedINList(traceIDs)
+	if inList == "" {
+		return nil
+	}
+
+	// The 1-day grace on the lower bound mirrors hierarchyFilterClauses: a
+	// workflow/agent/step span emitted shortly before the visible window still
+	// names its in-window LLM children (container spans are emitted at the
+	// START of a trace, i.e. at or before their children).
+	q := fmt.Sprintf(`
+SELECT span_id, parent_span_id, kind, coalesce(nullIf(feature_name, ''), '') AS name
+FROM llm_calls
+WHERE org_id = {org_id:String}
+  AND kind IN ('workflow', 'agent', 'step')
+  AND trace_id IN (%s)
+  AND timestamp >= {from:DateTime('UTC')} - INTERVAL 1 DAY
+  AND timestamp <  {to:DateTime('UTC')}
+`, inList)
+
+	rows, err := ch.Query(ctx, q,
+		driver.NamedValue{Name: "org_id", Value: orgID},
+		driver.NamedValue{Name: "from", Value: chDateTime(tw.From)},
+		driver.NamedValue{Name: "to", Value: chDateTime(tw.To)},
+	)
+	if err != nil {
+		return fmt.Errorf("resolve hierarchy paths: %w", err)
+	}
+	defer rows.Close() //nolint:errcheck
+
+	byID := make(map[string]containerSpan, len(traces))
+	for rows.Next() {
+		var spanID string
+		var sp containerSpan
+		if err := rows.Scan(&spanID, &sp.ParentSpanID, &sp.Kind, &sp.Name); err != nil {
+			return fmt.Errorf("scan container span: %w", err)
+		}
+		byID[spanID] = sp
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("container span rows: %w", err)
+	}
+
+	assignHierarchyPaths(traces, byID)
+	return nil
+}
+
+// assignHierarchyPaths walks each row's parent_span_id chain through the
+// container-span map `byID`, filling Workflow/Agent/Step by span kind. Pure
+// (no I/O) so the resolution logic is unit-testable without ClickHouse.
+//
+// The walk is cycle-guarded — a malformed parent link (a→b→a) can't hang the
+// request — and stops at the first ancestor that isn't a loaded container span
+// (e.g. a NULL parent on a workflow root, or a standalone LLM whose parent is
+// nil). The first ancestor of each kind wins, so the nearest step/agent/
+// workflow names the call even if the hierarchy is unusually deep.
+func assignHierarchyPaths(traces []TraceRow, byID map[string]containerSpan) {
+	for i := range traces {
+		seen := make(map[string]struct{}, 4)
+		cur := traces[i].ParentSpanID
+		for cur != nil && *cur != "" {
+			if _, dup := seen[*cur]; dup {
+				break // cycle guard
+			}
+			seen[*cur] = struct{}{}
+			sp, ok := byID[*cur]
+			if !ok {
+				break // ancestor isn't a known container span — chain ends
+			}
+			switch sp.Kind {
+			case "workflow":
+				if traces[i].Workflow == "" {
+					traces[i].Workflow = sp.Name
+				}
+			case "agent":
+				if traces[i].Agent == "" {
+					traces[i].Agent = sp.Name
+				}
+			case "step":
+				if traces[i].Step == "" {
+					traces[i].Step = sp.Name
+				}
+			}
+			cur = sp.ParentSpanID
+		}
+	}
 }

@@ -41,6 +41,7 @@ var rollupColumns = map[string]string{
 // High-cardinality dims that we don't pre-aggregate live here.
 var rawColumns = map[string]string{
 	"user":        "coalesce(user_id, '')",
+	"customer":    "coalesce(customer_id, '')",
 	"environment": "environment",
 }
 
@@ -52,6 +53,7 @@ var llmCallsColumns = map[string]string{
 	"provider":    "provider",
 	"feature":     "coalesce(feature_name, '')",
 	"user":        "coalesce(user_id, '')",
+	"customer":    "coalesce(customer_id, '')",
 	"environment": "environment",
 }
 
@@ -59,8 +61,8 @@ var llmCallsColumns = map[string]string{
 // two dimensions (cross-dim mode when secondary != "").
 //
 // Single-dim model/provider/feature hits the hourly rollup (cheap, scales
-// forever). Single-dim user/environment AND every cross-dim case scan raw
-// llm_calls (rollup lacks user/env columns).
+// forever). Single-dim user/customer/environment AND every cross-dim case scan
+// raw llm_calls (rollup lacks user/customer/env columns).
 func Breakdown(ctx context.Context, ch driver.Conn, orgID string, tw TimeWindow, groupBy, secondary string, limit int) (*BreakdownResult, error) {
 	if limit <= 0 {
 		limit = defaultBreakdownLimit

@@ -202,3 +202,77 @@ func hasNamedArg(args []driver.NamedValue, name, value string) bool {
 	}
 	return false
 }
+
+func strptr(s string) *string { return &s }
+
+// assignHierarchyPaths is the in-memory half of breadcrumb resolution: given
+// the container-span map for a page's traces, it walks each LLM row's
+// parent_span_id chain and fills Workflow/Agent/Step by kind. The DB half
+// (fetching the container spans) is covered by live verification; this pins
+// the walk semantics — the part that's easy to get subtly wrong (depth,
+// kind→slot mapping, cycle safety, dangling parents).
+func TestAssignHierarchyPaths(t *testing.T) {
+	// A trace with the full nesting: workflow(wf1) → agent(ag1) → step(st1) → llm.
+	// Plus a sibling step st2 under the same agent, and a second workflow tree.
+	byID := map[string]containerSpan{
+		"wf1": {ParentSpanID: nil, Kind: "workflow", Name: "billing-agent"},
+		"ag1": {ParentSpanID: strptr("wf1"), Kind: "agent", Name: "planner"},
+		"st1": {ParentSpanID: strptr("ag1"), Kind: "step", Name: "draft-response"},
+		// Direct workflow→agent→llm path (no step layer).
+		"wf2": {ParentSpanID: nil, Kind: "workflow", Name: "code-reviewer"},
+		"ag2": {ParentSpanID: strptr("wf2"), Kind: "agent", Name: "critic"},
+		// Workflow-only tree.
+		"wf3": {ParentSpanID: nil, Kind: "workflow", Name: "customer-support"},
+		// A cyclic pair (malformed data) — must not hang the walk.
+		"cyA": {ParentSpanID: strptr("cyB"), Kind: "step", Name: "loopy-step"},
+		"cyB": {ParentSpanID: strptr("cyA"), Kind: "agent", Name: "loopy-agent"},
+	}
+
+	traces := []TraceRow{
+		{SpanID: "llmFull", ParentSpanID: strptr("st1")},      // full path
+		{SpanID: "llmAgent", ParentSpanID: strptr("ag2")},     // wf + agent, no step
+		{SpanID: "llmWf", ParentSpanID: strptr("wf3")},        // wf only
+		{SpanID: "llmStandalone", ParentSpanID: nil},          // nothing
+		{SpanID: "llmDangling", ParentSpanID: strptr("gone")}, // parent absent
+		{SpanID: "llmCycle", ParentSpanID: strptr("cyA")},     // cyclic chain
+	}
+
+	assignHierarchyPaths(traces, byID)
+
+	want := []struct {
+		span, wf, agent, step string
+	}{
+		{"llmFull", "billing-agent", "planner", "draft-response"},
+		{"llmAgent", "code-reviewer", "critic", ""},
+		{"llmWf", "customer-support", "", ""},
+		{"llmStandalone", "", "", ""},
+		{"llmDangling", "", "", ""},
+		// Cycle: walk visits cyA (step) then cyB (agent) then would revisit
+		// cyA → guard breaks. Both names captured, no workflow, no hang.
+		{"llmCycle", "", "loopy-agent", "loopy-step"},
+	}
+	for i, w := range want {
+		got := traces[i]
+		if got.SpanID != w.span {
+			t.Fatalf("row %d: expected span %q, got %q", i, w.span, got.SpanID)
+		}
+		if got.Workflow != w.wf || got.Agent != w.agent || got.Step != w.step {
+			t.Errorf("row %q: got (wf=%q agent=%q step=%q), want (wf=%q agent=%q step=%q)",
+				w.span, got.Workflow, got.Agent, got.Step, w.wf, w.agent, w.step)
+		}
+	}
+}
+
+// First-of-kind wins: if two ancestors share a kind (shouldn't happen in real
+// data, but the walk must be deterministic), the NEAREST one names the call.
+func TestAssignHierarchyPaths_NearestWins(t *testing.T) {
+	byID := map[string]containerSpan{
+		"outerWf": {ParentSpanID: nil, Kind: "workflow", Name: "outer"},
+		"innerWf": {ParentSpanID: strptr("outerWf"), Kind: "workflow", Name: "inner"},
+	}
+	traces := []TraceRow{{SpanID: "llm", ParentSpanID: strptr("innerWf")}}
+	assignHierarchyPaths(traces, byID)
+	if traces[0].Workflow != "inner" {
+		t.Errorf("nearest workflow should win: got %q, want %q", traces[0].Workflow, "inner")
+	}
+}

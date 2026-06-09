@@ -304,7 +304,23 @@ func traceToGen(t query.TraceRow) gen.Trace {
 		CacheReadCostUsd: &cacheReadCost,
 		CostSource:       &costSource,
 		PricingVersion:   t.PricingVersion,
+		// Breadcrumb ancestry resolved on read. Unlike the cost fields above
+		// (always present), an absent ancestor is meaningful — nilIfEmpty omits
+		// it so the dashboard renders a shorter path rather than empty segments.
+		Workflow: nilIfEmpty(t.Workflow),
+		Agent:    nilIfEmpty(t.Agent),
+		Step:     nilIfEmpty(t.Step),
 	}
+}
+
+// nilIfEmpty returns nil for an empty string so an absent value is omitted from
+// the JSON response (omitempty) rather than serialized as "". Used for the
+// optional breadcrumb-ancestry fields.
+func nilIfEmpty(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }
 
 func uintPtrToIntPtr(u *uint32) *int {

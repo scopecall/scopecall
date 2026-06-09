@@ -65,7 +65,15 @@ SELECT
     feature_name, user_id, session_id, environment, sdk_version,
     if({is_owner:UInt8}, extra, NULL) AS extra,
     prompt_version,
-    kind
+    kind,
+    -- v0.3 retry attribution: attempt_number > 1 (with retry_reason) marks a
+    -- caller retry. The drawer groups same-span_id rows into an ATTEMPTS list
+    -- and tallies the wasted spend on the failed attempts.
+    attempt_number, retry_reason,
+    -- Cost trust signal — drives the drawer's confidence dot. The list/detail
+    -- endpoints already return these; the tree omitted them, so the drawer
+    -- showed "unknown" for every span. Surface them here too.
+    cost_source, pricing_version
 FROM llm_calls
 WHERE org_id   = {org_id:String}
   AND trace_id = {trace_id:String}
@@ -99,6 +107,8 @@ LIMIT 500
 			&t.FeatureName, &t.UserID, &t.SessionID, &t.Environment, &t.SDKVersion, &t.Extra,
 			&t.PromptVersion,
 			&t.Kind,
+			&t.AttemptNumber, &t.RetryReason,
+			&t.CostSource, &t.PricingVersion,
 		); err != nil {
 			return nil, fmt.Errorf("scan trace span: %w", err)
 		}

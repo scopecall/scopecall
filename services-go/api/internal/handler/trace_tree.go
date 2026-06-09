@@ -47,6 +47,15 @@ type traceSpanJSON struct {
 	// rows differently (no model badge, no cost summary) because they're
 	// synthetic containers, not provider calls.
 	Kind string `json:"kind"`
+	// v0.3 retry attribution. AttemptNumber defaults to 1; when > 1 the row is
+	// a caller retry and RetryReason names why. The drawer groups same-span_id
+	// rows into an ATTEMPTS list and sums the failed attempts as wasted spend.
+	AttemptNumber uint16  `json:"attempt_number"`
+	RetryReason   *string `json:"retry_reason,omitempty"`
+	// Cost trust signal — the drawer's confidence dot reads these. Empty/nil
+	// for spans the pricer didn't stamp (treated as "unknown" client-side).
+	CostSource     string  `json:"cost_source,omitempty"`
+	PricingVersion *string `json:"pricing_version,omitempty"`
 }
 
 type traceTreeResponseJSON struct {
@@ -106,32 +115,36 @@ func (s *Server) GetTraceTreeHTTP(w http.ResponseWriter, r *http.Request) {
 	resp := traceTreeResponseJSON{Spans: make([]traceSpanJSON, 0, len(spans))}
 	for _, s := range spans {
 		resp.Spans = append(resp.Spans, traceSpanJSON{
-			OrgID:         s.OrgID,
-			TraceID:       s.TraceID,
-			SpanID:        s.SpanID,
-			ParentSpanID:  s.ParentSpanID,
-			Timestamp:     s.Timestamp,
-			Model:         s.Model,
-			Provider:      s.Provider,
-			InputTokens:   s.InputTokens,
-			OutputTokens:  s.OutputTokens,
-			CostUSD:       s.CostUSD,
-			InputCostUSD:  s.InputCostUSD,
-			OutputCostUSD: s.OutputCostUSD,
-			LatencyMS:     s.LatencyMS,
-			TTFTMS:        s.TTFTMS,
-			Status:        s.Status,
-			ErrorMessage:  s.ErrorMessage,
-			InputText:     s.InputText,
-			OutputText:    s.OutputText,
-			FeatureName:   s.FeatureName,
-			UserID:        s.UserID,
-			SessionID:     s.SessionID,
-			Environment:   s.Environment,
-			SDKVersion:    s.SDKVersion,
-			Extra:         s.Extra,
-			PromptVersion: s.PromptVersion,
-			Kind:          s.Kind,
+			OrgID:          s.OrgID,
+			TraceID:        s.TraceID,
+			SpanID:         s.SpanID,
+			ParentSpanID:   s.ParentSpanID,
+			Timestamp:      s.Timestamp,
+			Model:          s.Model,
+			Provider:       s.Provider,
+			InputTokens:    s.InputTokens,
+			OutputTokens:   s.OutputTokens,
+			CostUSD:        s.CostUSD,
+			InputCostUSD:   s.InputCostUSD,
+			OutputCostUSD:  s.OutputCostUSD,
+			LatencyMS:      s.LatencyMS,
+			TTFTMS:         s.TTFTMS,
+			Status:         s.Status,
+			ErrorMessage:   s.ErrorMessage,
+			InputText:      s.InputText,
+			OutputText:     s.OutputText,
+			FeatureName:    s.FeatureName,
+			UserID:         s.UserID,
+			SessionID:      s.SessionID,
+			Environment:    s.Environment,
+			SDKVersion:     s.SDKVersion,
+			Extra:          s.Extra,
+			PromptVersion:  s.PromptVersion,
+			Kind:           s.Kind,
+			AttemptNumber:  s.AttemptNumber,
+			RetryReason:    s.RetryReason,
+			CostSource:     s.CostSource,
+			PricingVersion: s.PricingVersion,
 		})
 	}
 
