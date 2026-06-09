@@ -22,7 +22,7 @@ Both required secrets are enforced at startup — the stack will refuse to boot 
 Always pin `SCOPECALL_VERSION` in production so deployments are reproducible:
 
 ```bash
-echo "SCOPECALL_VERSION=v0.1.1" >> infra/.env
+echo "SCOPECALL_VERSION=v0.3.1" >> infra/.env
 ```
 
 ## Upgrading

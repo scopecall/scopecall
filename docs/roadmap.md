@@ -2,6 +2,26 @@
 
 This is a directional roadmap, not a commitment. Priorities shift based on user feedback. Want to influence what we build next? Open a [GitHub Discussion](https://github.com/scopecall/scopecall/discussions).
 
+## Shipped — v0.3.1
+
+A dashboard-redesign and hardening release on top of the v0.3.0
+cost-attribution core — no SDK or API changes, drop-in for existing
+installs.
+
+- **Redesigned dashboard, promoted to canonical routes.** The rebuilt
+  surface is now the canonical `/dashboard/*` experience; the legacy UI
+  and the `/preview` staging surface are retired. New navigation chrome
+  with an account menu + theme switcher.
+- **Theme polish.** Refreshed dark theme plus a light theme whose
+  semantic colors (success / warning / danger) are legible on white.
+- **Consistent interaction affordances.** Shared hover / active / focus
+  states and an elevation scale across rows, cards, and controls.
+- **Rollup correctness.** Fixes an `llm_metrics_hourly` undercount
+  (additive columns summed correctly) and adds a reconcile-from-raw
+  safety net.
+- **Processor throughput.** Events are borrowed into ClickHouse rows
+  instead of cloning the batch on every flush.
+
 ## Shipped — v0.3.0
 
 The cost-attribution release. Builds on v0.1.1 (SDK + traces + cost
@@ -53,12 +73,12 @@ the new data into actionable spend.
 - **Durable processor offsets** + idempotent ClickHouse migration runner so upgrades don't lose data
 - **Manual rollup repair script** (`scripts/backfill-llm-metrics-hourly.sh`) for upgrade installs whose pre-005 materialized view polluted historical hours — atomic-rename swap with built-in MV verification
 
-## Next — v0.3.1
+## Next — v0.3.2
 
 - Two-way API key scopes in the dashboard UI — let operators mint
   read-only keys (`traces:read` without `ingest:write`) for export
   scripts and CI jobs. The backend already accepts this combination
-  today; v0.3.1 adds the second checkbox + the "at least one scope
+  today; v0.3.2 adds the second checkbox + the "at least one scope
   required" form-state guard so it's reachable without dropping to
   curl. (See `ARCHITECTURE.md § Scope vocabulary` for the asymmetry
   this closes.)
@@ -66,7 +86,7 @@ the new data into actionable spend.
 - Productized rollup backfill UX for upgrade installs (kind-aware
   aggregates) — the manual repair script
   `scripts/backfill-llm-metrics-hourly.sh` already ships today;
-  v0.3.1 wraps it in a one-click dashboard action with progress +
+  v0.3.2 wraps it in a one-click dashboard action with progress +
   dry-run.
 - **Waste Inbox lookback alignment.** Waste Inbox currently builds
   its workflow/step maps over `[from, to)` only; the `/traces`

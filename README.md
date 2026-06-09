@@ -8,7 +8,7 @@
 <h1 align="center">ScopeCall</h1>
 
 <p align="center">
-  <a href="https://github.com/scopecall/scopecall/releases/tag/v0.1.1"><img src="https://img.shields.io/badge/version-v0.1.1-6366f1" alt="Version"></a>
+  <a href="https://github.com/scopecall/scopecall/releases/tag/v0.3.1"><img src="https://img.shields.io/badge/version-v0.3.1-6366f1" alt="Version"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License"></a>
   <a href="https://www.npmjs.com/package/@scopecall/scopecall-js"><img src="https://img.shields.io/npm/v/@scopecall/scopecall-js?label=npm&color=cb3837" alt="npm"></a>
   <a href="https://pypi.org/project/scopecall-py/"><img src="https://img.shields.io/pypi/v/scopecall-py?label=pypi&color=3776ab" alt="PyPI"></a>
@@ -22,6 +22,27 @@
 ScopeCall captures LLM traces via SDK instrumentation (no added latency, no proxy) — TypeScript (OpenAI, Anthropic, Vercel AI SDK) and Python (OpenAI, Anthropic; sync, async, streaming) — ships the events to a self-hosted ClickHouse + Postgres stack, and displays them in a real-time dashboard with cost / latency / prompt-version breakdowns. Budget enforcement and an agent execution debugger are on the roadmap.
 
 Licensed under [Apache 2.0](LICENSE). Free for any use — self-hosted, commercial, modified, redistributed. We monetize via the managed-cloud product (in development) and enterprise features, not via licensing teeth.
+
+---
+
+## What's new in v0.3.1
+
+A full dashboard redesign on top of the v0.3.0 cost-attribution core —
+no SDK or API changes, drop-in for existing installs.
+
+- **Rebuilt dashboard.** The redesigned surface is now the canonical
+  `/dashboard/*` experience; the legacy UI is retired. New navigation
+  chrome with an account menu + theme switcher, a refreshed dark theme,
+  and a light theme with legible semantic colors.
+- **Consistent affordances.** Shared hover / active / focus states and a
+  real elevation scale, so every clickable surface reads as clickable.
+- **Rollup correctness.** Fixes an `llm_metrics_hourly` undercount
+  (additive columns are now summed correctly) plus a reconcile-from-raw
+  safety net.
+- **Processor throughput.** Events are borrowed into ClickHouse rows
+  instead of cloning the batch on every flush.
+
+Everything in v0.3.0 below still applies.
 
 ---
 
@@ -76,7 +97,7 @@ instrumentation (TS + Python), prompt-version analytics, server-
 authoritative pricing, self-hosted Docker Compose stack, Auth.js, API
 key management, alerts, durable processor offsets.
 
-**Not yet in v0.3:** Gemini support (v0.3.1), OpenTelemetry GenAI
+**Not yet in v0.3:** Gemini support (v0.3.2), OpenTelemetry GenAI
 bridge (v0.4.x), native LangChain / LlamaIndex integrations (v0.5.0;
 the manual `record_llm_call(...)` API works today as a bridge),
 budget enforcement / model fallback (v0.6.0), agent execution
@@ -247,8 +268,9 @@ all reads go through the Go API.
 |---------|-----------|
 | **v0.1.0** | OpenAI tracing (TypeScript SDK), self-hosted stack, traces view, cost display |
 | **v0.1.1** | Anthropic + Vercel AI SDK support; workflow spans; per-prompt-version analytics; API key management; durable processor offsets. **Python SDK** (`scopecall-py@0.2.0`) ships alongside with OpenAI + Anthropic sync/async/streaming instrumentation and a manual `record_llm_call(...)` API for LangChain / LlamaIndex / custom wrappers. |
-| **v0.3.0** *(current)* | Cost attribution — `sdk.workflow()` / `sdk.agent()` / `sdk.step()` hierarchy, `customer_id` B2B tenant tag, retry attribution (`attempt_number` + `retry_reason`), `is_test` flag, server-derived `cost_source` + `pricing_version`. Dashboard: Workflow Treemap + workflow detail page + Customers page + Waste Inbox + Cost Confidence card. |
-| **v0.3.1** | Gemini SDK support; productized rollup backfill UX (the manual repair script `scripts/backfill-llm-metrics-hourly.sh` ships today) |
+| **v0.3.0** | Cost attribution — `sdk.workflow()` / `sdk.agent()` / `sdk.step()` hierarchy, `customer_id` B2B tenant tag, retry attribution (`attempt_number` + `retry_reason`), `is_test` flag, server-derived `cost_source` + `pricing_version`. Dashboard: Workflow Treemap + workflow detail page + Customers page + Waste Inbox + Cost Confidence card. |
+| **v0.3.1** *(current)* | Dashboard redesign — redesigned surface promoted to the canonical `/dashboard/*` routes (legacy UI retired), new navigation chrome + account menu, refreshed dark theme, legible light theme; rollup-correctness fixes (`llm_metrics_hourly` undercount); processor throughput. |
+| **v0.3.2** | Gemini SDK support; productized rollup backfill UX (the manual repair script `scripts/backfill-llm-metrics-hourly.sh` ships today) |
 | **v0.4.x** | OpenTelemetry GenAI bridge; configurable alert channels |
 | **v0.5.0** | Native LangChain + LlamaIndex framework integrations (Python + TypeScript) |
 | **v0.6.0** | Budget enforcement — alert, soft-block, model fallback |
