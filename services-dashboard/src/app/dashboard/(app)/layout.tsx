@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   Activity,
   Bell,
@@ -10,16 +10,22 @@ import {
   ChevronDown,
   LayoutDashboard,
   List,
+  LogOut,
   Menu,
   Settings,
   Wallet,
   X,
 } from "lucide-react";
+import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
+import { auth, type AuthUser } from "@/lib/auth";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useFocusTrap } from "./_lib/use-focus-trap";
@@ -192,7 +198,11 @@ export default function V2Layout({ children }: { children: React.ReactNode }) {
 function Brand() {
   return (
     <div className="h-12 flex items-center px-3.5 shrink-0">
-      <div className="size-7 shrink-0 rounded-md bg-gradient-to-b from-[#2563EB] via-[#5B54E8] to-[#8B5CF6]" />
+      {/* Real brand mark — the same asset the login page uses, so the chrome and
+          auth screens stay cohesive. Pure-shape SVG on a transparent ground (not
+          a tile) → needs no background/rounding and reads on both themes. alt=""
+          because the adjacent wordmark is the accessible label. */}
+      <img src="/scopecall-mark.svg" alt="" className="size-7 shrink-0" />
       <span className="ml-2.5 text-sm font-semibold whitespace-nowrap">ScopeCall</span>
     </div>
   );
@@ -262,7 +272,84 @@ function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
       {/* Scope + time — global, replaces every per-page picker (URL-backed). */}
       <ScopePill />
       <TimePill />
+
+      {/* Push the account control to the far right of the bar. */}
+      <div className="flex-1" />
+
+      {/* Identity, theme switcher, sign out. */}
+      <UserMenu />
     </header>
+  );
+}
+
+/**
+ * Account control — avatar (signed-in user's initial) opening a menu with the
+ * identity, a theme switcher, and sign out. Ported from the retired top-header
+ * when the cutover replaced the old chrome; without it the dashboard had no way
+ * to see who you're signed in as or to log out. Auth goes through the `auth`
+ * abstraction (Supabase / Auth.js / dev-bypass — selected at build time), so
+ * this is provider-agnostic.
+ */
+function UserMenu() {
+  const router = useRouter();
+  const { theme, setTheme } = useTheme();
+  const [user, setUser] = useState<AuthUser | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    auth.getUser().then((u) => {
+      if (active) setUser(u);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  async function signOut() {
+    await auth.signOut();
+    router.push("/auth/login");
+    router.refresh();
+  }
+
+  const email = user?.email ?? null;
+  const initial = email?.[0]?.toUpperCase() ?? "?";
+  const role = user?.role ? user.role[0].toUpperCase() + user.role.slice(1) : null;
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        aria-label="Account menu"
+        className="size-7 shrink-0 rounded-full bg-primary/20 text-foreground flex items-center justify-center text-xs font-semibold border border-border hover:bg-primary/30 transition-colors focus-ring"
+      >
+        {initial}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" sideOffset={8} className="w-64">
+        {/* Identity block. */}
+        <div className="px-2 py-2">
+          <p className="text-sm font-medium truncate">{email ?? "Signed in"}</p>
+          {role && <p className="text-xs text-muted-foreground">{role}</p>}
+        </div>
+        <DropdownMenuSeparator />
+
+        {/* Theme switcher. Plain div for the heading, NOT DropdownMenuLabel:
+            Base UI's MenuGroupLabel requires a surrounding MenuGroup context
+            and crashes the menu on open if used standalone. */}
+        <div className="px-1.5 pt-1.5 pb-1 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+          Theme
+        </div>
+        <DropdownMenuRadioGroup value={theme ?? "system"} onValueChange={setTheme}>
+          <DropdownMenuRadioItem value="dark">Dark</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="light">Light</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="system">System</DropdownMenuRadioItem>
+        </DropdownMenuRadioGroup>
+
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={signOut}>
+          <LogOut className="size-4" />
+          Sign out
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
