@@ -84,7 +84,7 @@ export function OverviewInsights({ orgId, from, to, enabled }: Props) {
           <span className="text-foreground font-medium">All quiet.</span>{" "}
           <span className="text-muted-foreground">
             Nothing notable in this window. Take a look at the{" "}
-            <Link href="/dashboard/flow" className="text-brand hover:underline">Flow Map</Link>{" "}
+            <Link href="/dashboard/traces" className="text-brand hover:underline">Flow Map</Link>{" "}
             to understand your app&apos;s call patterns.
           </span>
         </div>
@@ -194,7 +194,7 @@ function deriveInsights({
         severity: pct > 0 ? "watch" : "info",
         headline: `Cost ${direction} ${Math.abs(pct).toFixed(0)}%`,
         sublabel: sub,
-        href: `/dashboard/cost?${qs}`,
+        href: `/dashboard/spend?${qs}`,
         icon: pct > 0 ? TrendingUp : TrendingDown,
       });
     }
@@ -262,7 +262,7 @@ function deriveInsights({
         severity: "info",
         headline: `${dominantModel.key} = ${(share * 100).toFixed(0)}% of cost`,
         sublabel: `${money(dominantModel.current_cost_usd)} of ${money(overview.total_cost_usd)} this window. Worth knowing for cost optimization.`,
-        href: `/dashboard/cost?${qs}`,
+        href: `/dashboard/spend?${qs}`,
         icon: DollarSign,
       });
     }

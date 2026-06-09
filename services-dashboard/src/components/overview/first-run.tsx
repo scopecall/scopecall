@@ -214,7 +214,7 @@ export function FirstRunDashboard({ orgId, onFirstCall }: Props) {
         </div>
         <p className="mt-3 text-[11px] text-muted-foreground">
           Need an API key?{" "}
-          <a href="/dashboard/settings/keys" className="text-brand hover:underline">
+          <a href="/dashboard/settings" className="text-brand hover:underline">
             Create one
           </a>
           . Stuck?{" "}

@@ -57,20 +57,21 @@ function dimLabel(r: Regression): string {
 }
 
 // Build the drill-down URL — different metrics have different best-fit pages.
+// All targets are v2 surfaces; v2 replaces the classic dashboard, so we never
+// link back into /dashboard/{traces,cost}.
 function drillHref(r: Regression, from: Date, to: Date): string {
   const qs = new URLSearchParams({
     from: from.toISOString(),
     to: to.toISOString(),
-    model: r.model,
   });
-  // feature_name (NOT "feature") — must match Traces page URL state.
-  // See flow/page.tsx for the same fix; both sites shipped broken.
-  if (r.feature && r.feature !== r.model) qs.set("feature_name", r.feature);
-  if (r.kind === "error_rate") {
-    qs.set("status", "error");
-    return `/dashboard/traces?${qs}`;
-  }
-  if (r.kind === "cost") return `/dashboard/cost?${qs}`;
+  // Cost regressions open the v2 Spend explorer, which scopes by window only
+  // (it takes no inbound dimension filter), so model/feature would be dropped.
+  if (r.kind === "cost") return `/dashboard/spend?${qs}`;
+  // error_rate + latency open v2 Traces. NOTE: v2 reads `model` + `feature`
+  // (NOT the classic `feature_name`).
+  qs.set("model", r.model);
+  if (r.feature && r.feature !== r.model) qs.set("feature", r.feature);
+  if (r.kind === "error_rate") qs.set("status", "error");
   return `/dashboard/traces?${qs}`;
 }
 
