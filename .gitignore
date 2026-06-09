@@ -44,4 +44,7 @@ REPO_STRATEGY.md
 
 # Build artifacts that shouldn't be committed
 services-go/tools/dlq-drain/dlq-drain
+
+# Agent/editor session dirs — never commit
+/.claude/
 services-dashboard/.claude/
