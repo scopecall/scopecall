@@ -266,3 +266,44 @@
     outline-offset: 2px;
   }
 }
+
+/*
+ * Light-theme semantic palette correction.
+ *
+ * The red / amber / emerald / orange utilities used for status text, badges,
+ * deltas and chart marks (text-*-300, text-*-400, fill/stroke-*-300/400, …)
+ * are tuned for the DARK canvas, where high-lightness shades pop. On the white
+ * light-theme surface those same pale shades wash out and fail contrast — the
+ * "green / yellow / red look too faint on white" report.
+ *
+ * Tailwind v4 emits every palette utility as `color: var(--color-<name>)`, so
+ * we re-point just the pale end of each ramp (100–400) to darker, legible
+ * values for light mode only. Scoped to :root:not(.dark) and left UN-LAYERED
+ * so it reliably overrides Tailwind's own (layered) @theme defaults; the .dark
+ * theme keeps the originals untouched.
+ *
+ * Only -100…-400 are remapped: -500+ are already legible on white (used for
+ * borders, solid fills, and deliberately-dark text) and keep their hue.
+ */
+:root:not(.dark) {
+  /* red — error / waste / over-budget */
+  --color-red-100: oklch(60% 0.21 25);
+  --color-red-200: oklch(57% 0.225 26);
+  --color-red-300: oklch(53% 0.23 27);
+  --color-red-400: oklch(50% 0.215 27.5);
+  /* orange — secondary warning / chart marks */
+  --color-orange-100: oklch(62% 0.17 55);
+  --color-orange-200: oklch(59% 0.18 52);
+  --color-orange-300: oklch(56% 0.18 50);
+  --color-orange-400: oklch(53% 0.17 48);
+  /* amber — warning / "needs attention" */
+  --color-amber-100: oklch(60% 0.155 62);
+  --color-amber-200: oklch(57% 0.16 58);
+  --color-amber-300: oklch(54% 0.16 53);
+  --color-amber-400: oklch(51% 0.155 50);
+  /* emerald — success / healthy / savings */
+  --color-emerald-100: oklch(60% 0.14 163);
+  --color-emerald-200: oklch(57% 0.145 163);
+  --color-emerald-300: oklch(53% 0.145 164);
+  --color-emerald-400: oklch(49% 0.13 165);
+}
