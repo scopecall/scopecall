@@ -212,11 +212,17 @@ func (s scanJSON) Scan(src any) error {
 }
 
 func (s *Store) ListRules(ctx context.Context, orgID string) ([]Rule, error) {
+	// LIMIT is a UI guard only — this list powers the org-scoped Alerts page,
+	// which renders a row per rule. The evaluator does NOT use this method (it
+	// calls ListEnabledRulesAcrossOrgs, which is intentionally unbounded), so
+	// capping here can't starve evaluation. 500 is far above any realistic
+	// per-org rule count.
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, org_id, name, type, threshold, window_seconds, dim_filter::text, channel_type, channel_config::text, enabled, created_at
 		FROM alert_rules
 		WHERE org_id = $1
 		ORDER BY created_at DESC
+		LIMIT 500
 	`, orgID)
 	if err != nil {
 		return nil, fmt.Errorf("list alert rules: %w", err)
