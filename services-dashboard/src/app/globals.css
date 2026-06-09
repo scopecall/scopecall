@@ -34,6 +34,10 @@
   --color-card-foreground: var(--card-foreground);
   --color-popover: var(--popover);
   --color-popover-foreground: var(--popover-foreground);
+  /* Interaction surfaces — a perceptible step above card so hover/active are
+   * actually visible. See the .dark / :root definitions for the rationale. */
+  --color-surface-hover: var(--surface-hover);
+  --color-surface-active: var(--surface-active);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
@@ -84,6 +88,9 @@
     --card-foreground: oklch(0.145 0 0);
     --popover: oklch(1 0 0);
     --popover-foreground: oklch(0.145 0 0);
+    /* On a white card, hover/active step slightly DARKER toward gray. */
+    --surface-hover: oklch(0.968 0 0);
+    --surface-active: oklch(0.94 0 0);
     --primary: #5B54E8;
     --primary-foreground: oklch(0.985 0 0);
     --secondary: oklch(0.97 0 0);
@@ -133,14 +140,23 @@
      * Elevation scale follows their gray-dark token ladder:
      *   gray-dark-200  #1C1C1C  hsl(0 0% 11%)   ← canvas + sidebar
      *   gray-dark-300  #232323  hsl(0 0% 13.7%) ← cards / muted
+     *   gray-dark-350  #2E2E2E  hsl(0 0% 18%)   ← row/tile HOVER surface
      *   gray-dark-400  #282828  hsl(0 0% 15.7%) ← popovers
-     *   gray-dark-600  #343434  hsl(0 0% 20.4%) ← borders */
+     *   gray-dark-450  #343434  hsl(0 0% 20.4%) ← active/selected surface
+     *   gray-dark-600  #3A3A3A  hsl(0 0% 22.7%) ← borders
+     *
+     * Why a dedicated hover surface: muted == card (#232323), so the old
+     * `hover:bg-muted/30` idiom produced an imperceptible shift — "hover feels
+     * invisible." --surface-hover is a real, lighter step so a row visibly
+     * lifts on hover, and --surface-active marks the pressed/selected state. */
     --background: #1C1C1C;
     --foreground: #FAFAFA;
     --card: #232323;
     --card-foreground: #FAFAFA;
     --popover: #282828;
     --popover-foreground: #FAFAFA;
+    --surface-hover: #2E2E2E;
+    --surface-active: #343434;
     --primary: #5B54E8;
     --primary-foreground: #FAFAFA;
     --secondary: #232323;
@@ -150,8 +166,11 @@
     --accent: rgba(91, 84, 232, 0.15);
     --accent-foreground: #FAFAFA;
     --destructive: oklch(0.65 0.21 25);
-    --border: #343434;
-    --input: #343434;
+    /* Bumped from #343434 → #3A3A3A: the old border sat only ~17/255 above the
+     * card fill, so sections blurred together. #3A3A3A reads as a clear hairline
+     * on both card (#232323) and canvas (#1C1C1C) without feeling heavy. */
+    --border: #3A3A3A;
+    --input: #3A3A3A;
     --ring: #5B54E8;
     --chart-1: #2563EB;
     --chart-2: #5B54E8;
@@ -164,7 +183,7 @@
     --sidebar-primary-foreground: #FAFAFA;
     --sidebar-accent: rgba(91, 84, 232, 0.15);
     --sidebar-accent-foreground: #FAFAFA;
-    --sidebar-border: #343434;
+    --sidebar-border: #3A3A3A;
     --sidebar-ring: #5B54E8;
   }
   * {
@@ -181,5 +200,69 @@
   }
   code, kbd, samp, pre {
     font-family: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  }
+  /* Tailwind v4's Preflight dropped the legacy `button { cursor: pointer }`, so
+   * native <button>s and role="button" elements fall back to the arrow cursor —
+   * which reads as "not clickable" and was a big part of why affordances felt
+   * dead. Restore the pointer for enabled interactive elements app-wide. Anchors
+   * with href already get it from the UA sheet; a utility like `cursor-default`
+   * still wins since utilities sit above this base layer. */
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
+/*
+ * Shared interaction primitives.
+ *
+ * The dark palette keeps canvas (#1C1C1C), card (#232323) and muted (#232323)
+ * inside one luminance band, so the old `hover:bg-muted/30` idiom produced an
+ * imperceptible shift and nothing signalled "this is clickable." These classes
+ * give every clickable surface ONE consistent language — a real hover lift plus
+ * a keyboard focus ring — driven by the --surface-hover / --surface-active
+ * tokens. Focus uses `outline` (not Tailwind's box-shadow `ring`) so it never
+ * clobbers a card's existing ring; card hover brightens the edge by recolouring
+ * Tailwind's own --tw-ring-color, which composes instead of overriding.
+ */
+@layer components {
+  /* Clickable list / table rows. Pair with a trailing chevron so the affordance
+   * reads even before hover. Inset outline survives `overflow-hidden` parents. */
+  .row-interactive {
+    cursor: pointer;
+    transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
+  }
+  .row-interactive:hover {
+    background-color: var(--surface-hover);
+  }
+  .row-interactive:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: -2px;
+  }
+  /* Currently-selected row (e.g. the open trace in the drawer list). */
+  .row-interactive[data-active="true"],
+  .row-active {
+    background-color: var(--surface-active);
+  }
+
+  /* Clickable cards / tiles — hover lifts the surface and brightens the ring. */
+  .card-interactive {
+    cursor: pointer;
+    transition: background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+  }
+  .card-interactive:hover {
+    background-color: var(--surface-hover);
+    --tw-ring-color: color-mix(in oklab, var(--foreground) 22%, transparent);
+  }
+  .card-interactive:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  /* Standalone keyboard focus ring for bare buttons / tabs / switches that
+   * don't use the row/card primitives. */
+  .focus-ring:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
   }
 }
