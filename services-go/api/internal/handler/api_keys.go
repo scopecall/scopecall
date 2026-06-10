@@ -15,6 +15,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
+	"go.uber.org/zap"
 
 	"github.com/scopecall/services-go/api/internal/db"
 	"github.com/scopecall/services-go/api/internal/middleware"
@@ -32,6 +33,7 @@ import (
 type APIKeysServer struct {
 	Q     *db.Queries
 	Redis *redis.Client
+	Log   *zap.Logger
 }
 
 // Scope vocabulary (kept in sync with schemas/postgres/migrations/005_api_key_scopes.sql
@@ -257,6 +259,9 @@ func (s *APIKeysServer) CreateKey(w http.ResponseWriter, r *http.Request) {
 		Scopes:    scopes,
 	})
 	if err != nil {
+		// Log the underlying DB error server-side; the client only sees a
+		// generic 500 (we don't leak driver/constraint detail over the wire).
+		s.Log.Error("api key create failed", zap.String("org_id", claims.OrgID), zap.Error(err))
 		problem.Write(w, http.StatusInternalServerError, "Internal Server Error", "key create failed")
 		return
 	}

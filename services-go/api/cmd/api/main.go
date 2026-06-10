@@ -356,7 +356,7 @@ func main() {
 		// revoke endpoint still works (Postgres flag is authoritative) but
 		// the previously-cached entry would keep authenticating for up to
 		// 60s.
-		keysHandler := &handler.APIKeysServer{Q: queries, Redis: rdb}
+		keysHandler := &handler.APIKeysServer{Q: queries, Redis: rdb, Log: log}
 		r.Get("/api/v1/orgs/{org_id}/keys", keysHandler.ListKeys)
 		r.Post("/api/v1/orgs/{org_id}/keys", keysHandler.CreateKey)
 		r.Delete("/api/v1/orgs/{org_id}/keys/{key_id}", keysHandler.RevokeKey)
