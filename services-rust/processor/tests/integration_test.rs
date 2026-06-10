@@ -148,7 +148,10 @@ async fn dlq_retry_exhaustion_no_docker() {
     // because it takes concrete types, so we replicate the logic here.)
     let mut last_error = String::new();
     for attempt in 1..=MAX_ATTEMPTS {
-        match failing_writer.insert_batch(std::slice::from_ref(&event)).await {
+        match failing_writer
+            .insert_batch(std::slice::from_ref(&event))
+            .await
+        {
             Ok(()) => break,
             Err(e) => {
                 last_error = e.to_string();
