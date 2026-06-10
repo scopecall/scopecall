@@ -48,18 +48,14 @@ services:
     container_name: scopecall-clickhouse
     volumes:
       - clickhouse-data:/var/lib/clickhouse
-      # ClickHouse runs every .sql under /docker-entrypoint-initdb.d/ in
-      # alphabetical order on first init (not on container restart). Mount
-      # ALL migrations so a fresh install ends up with the same schema as
-      # an upgraded one. Adding a migration here is mandatory whenever
-      # processor/writer.rs grows a new column — otherwise the processor
-      # tries to insert into a column that doesn't exist on fresh installs
-      # and every event 400s silently. (Round-2 external-review P0.)
-      - ../schemas/clickhouse/001_initial.sql:/docker-entrypoint-initdb.d/001_initial.sql:ro
-      - ../schemas/clickhouse/002_trace_id_skip_index.sql:/docker-entrypoint-initdb.d/002_trace_id_skip_index.sql:ro
-      - ../schemas/clickhouse/003_prompt_version.sql:/docker-entrypoint-initdb.d/003_prompt_version.sql:ro
-      - ../schemas/clickhouse/004_span_kind.sql:/docker-entrypoint-initdb.d/004_span_kind.sql:ro
-      - ../schemas/clickhouse/005_kind_aware_rollup.sql:/docker-entrypoint-initdb.d/005_kind_aware_rollup.sql:ro
+      # Schema is owned by the clickhouse-migrate service below. It runs on
+      # every `up` and applies every file in schemas/clickhouse through a
+      # tracker table — bootstrapping an empty volume and upgrading a
+      # populated one via the same path. Migrations are deliberately NOT
+      # mounted into /docker-entrypoint-initdb.d/ here: initdb.d runs only on
+      # first init and bypasses the tracker, so mounting them would
+      # double-apply on fresh installs and silently skip upgrades on existing
+      # ones. One source of truth, one code path.
       # Allow the default user to connect from Docker-internal IPs
       - ./self-hosted/clickhouse-users/allow_default.xml:/etc/clickhouse-server/users.d/allow_default.xml:ro
     environment:
