@@ -11,6 +11,63 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## ScopeCall — [0.3.2] — 2026-06-10
+
+Patch release. Self-hosting and documentation fixes; no API, SDK, or
+schema changes. Drop-in for existing installs.
+
+### Fixed
+
+- **Self-hosting:** ClickHouse schema is now managed solely by the
+  migration runner. Removed redundant init-time schema mounts from
+  `infra/docker-compose.yml` that could double-apply migrations on a
+  fresh volume or be silently skipped on an upgrade.
+- **Docs:** Corrected `SCOPECALL_VERSION` examples in `infra/.env.example`
+  and the self-hosting guide to use the unprefixed image tag (e.g.
+  `0.3.2`, not `v0.3.2`). Published image tags never carry a leading `v`.
+
+### Changed
+
+- **Go API:** API-key creation failures now log the underlying database
+  error server-side to aid operator debugging. The HTTP response is
+  unchanged — still a generic 500 with no driver or constraint detail
+  leaked over the wire.
+
+### Upgrade
+
+Set `SCOPECALL_VERSION=0.3.2` in `infra/.env`, then:
+
+```bash
+docker compose -f infra/docker-compose.yml pull
+docker compose -f infra/docker-compose.yml up -d
+```
+
+---
+
+## ScopeCall — [0.3.1] — 2026-06-09
+
+A full dashboard redesign on top of the 0.3.0 cost-attribution core.
+No SDK or API changes — drop-in for existing installs.
+
+### Changed
+
+- **Rebuilt dashboard.** The redesigned surface is now the canonical
+  `/dashboard/*` experience; the legacy UI is retired. New navigation
+  chrome with an account menu + theme switcher, a refreshed dark theme,
+  and a light theme with legible semantic colors.
+- **Consistent affordances.** Shared hover / active / focus states and a
+  real elevation scale, so every clickable surface reads as clickable.
+- **Processor throughput.** Events are borrowed into ClickHouse rows
+  instead of cloning the batch on every flush.
+
+### Fixed
+
+- **Rollup correctness.** Fixes an `llm_metrics_hourly` undercount
+  (additive columns are now summed correctly) plus a reconcile-from-raw
+  safety net.
+
+---
+
 ## ScopeCall — [0.3.0] — 2026-06-06
 
 The cost-attribution release. Expand the wire format, ingest,
