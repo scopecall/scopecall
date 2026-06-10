@@ -178,6 +178,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
+          # Pin the Rust version so a new `stable` release can't reformat
+          # untouched code and red the build on an unrelated commit — the
+          # 1.95→1.96 bump did exactly that. Bump this deliberately.
+          toolchain: "1.96.0"
           components: rustfmt,clippy
       - uses: Swatinem/rust-cache@v2
         with:
