@@ -4,6 +4,8 @@ export default defineConfig({
   entry: {
     index: "src/index.ts",
     register: "src/register.ts",
+    "integrations/index": "src/integrations/index.ts",
+    "integrations/langchain": "src/integrations/langchain.ts",
   },
   format: ["esm", "cjs"],
   dts: true,

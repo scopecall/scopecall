@@ -85,6 +85,7 @@ class ScopeCallSDK:
         customer_id: str | None = None,
         prompt_version: str | None = None,
         kind: _context.SpanKind = "workflow",
+        parent_context: "_context.TraceContext | None" = None,
     ) -> Generator[_context.TraceContext, None, None]:
         """Run a block as a named workflow trace.
 
@@ -102,8 +103,18 @@ class ScopeCallSDK:
         outer's `trace_id`, gets its own `span_id`, and sets
         `parent_span_id = outer.span_id`. `prompt_version` inherits from
         the parent unless explicitly overridden in the child call.
+
+        ``parent_context``: an explicit parent ``TraceContext`` (captured
+        via ``sdk.capture_context()``) used INSTEAD of the ambient
+        contextvar to resolve the parent. This is what makes nesting work
+        across thread boundaries — ``contextvars`` don't propagate into
+        ``ThreadPoolExecutor`` workers, so framework adapters that fan
+        work out across threads capture the parent on the originating
+        thread and pass it in here. The new span is still pushed onto the
+        current thread's contextvar, so same-thread nesting inside the
+        block continues to work.
         """
-        parent = _context.get_current()
+        parent = parent_context or _context.get_current()
 
         # Resolve prompt_version precedence: explicit kwarg > parent
         # trace > config default > None. Matches the TS contract.
@@ -238,6 +249,7 @@ class ScopeCallSDK:
         session_id: str | None = None,
         customer_id: str | None = None,
         prompt_version: str | None = None,
+        parent_context: "_context.TraceContext | None" = None,
     ) -> Generator[_context.TraceContext, None, None]:
         """Mark a block as a workflow — the top of the cost-attribution
         hierarchy. Equivalent to sdk.trace() but reads more naturally
@@ -256,6 +268,7 @@ class ScopeCallSDK:
             customer_id=customer_id,
             prompt_version=prompt_version,
             kind="workflow",
+            parent_context=parent_context,
         ) as ctx:
             yield ctx
 
@@ -269,6 +282,7 @@ class ScopeCallSDK:
         session_id: str | None = None,
         customer_id: str | None = None,
         prompt_version: str | None = None,
+        parent_context: "_context.TraceContext | None" = None,
     ) -> Generator[_context.TraceContext, None, None]:
         """Mark a block as an agent. Typically nested inside a workflow
         but works standalone too.
@@ -286,6 +300,7 @@ class ScopeCallSDK:
             customer_id=customer_id,
             prompt_version=prompt_version,
             kind="agent",
+            parent_context=parent_context,
         ) as ctx:
             yield ctx
 
@@ -299,6 +314,7 @@ class ScopeCallSDK:
         session_id: str | None = None,
         customer_id: str | None = None,
         prompt_version: str | None = None,
+        parent_context: "_context.TraceContext | None" = None,
     ) -> Generator[_context.TraceContext, None, None]:
         """Mark a block as a step within an agent. The most granular
         level of the workflow/agent/step hierarchy.
@@ -316,6 +332,7 @@ class ScopeCallSDK:
             customer_id=customer_id,
             prompt_version=prompt_version,
             kind="step",
+            parent_context=parent_context,
         ) as ctx:
             yield ctx
 
@@ -448,10 +465,14 @@ class ScopeCallSDK:
             from .instrumentation._anthropic import instrument_anthropic
 
             instrument_anthropic(client, self)
+        elif provider in ("google", "gemini"):
+            from .instrumentation._gemini import instrument_gemini
+
+            instrument_gemini(client, self)
         else:
             raise ValueError(
                 f"unknown provider: {provider!r}. "
-                "Supported: 'openai', 'anthropic'."
+                "Supported: 'openai', 'anthropic', 'google'."
             )
         return client
 
@@ -482,6 +503,7 @@ class ScopeCallSDK:
         tool_calls: str | None = None,
         attempt_number: int = 1,
         retry_reason: str | None = None,
+        context: "_context.TraceContext | None" = None,
     ) -> None:
         """Manually record an LLM call as if a provider instrumentation had.
 
@@ -494,10 +516,19 @@ class ScopeCallSDK:
         TraceContext if the call is inside a `sdk.trace()` block;
         otherwise the event is treated as a top-level orphan trace.
 
+        ``context``: an explicit ``TraceContext`` (captured via
+        ``sdk.capture_context()``) that takes precedence over the ambient
+        contextvar. This is the thread-safety escape hatch: ``contextvars``
+        do NOT propagate into ``ThreadPoolExecutor`` / ``threading.Thread``
+        workers, so a parent span captured on the main thread would
+        otherwise be lost. Capture the context where the span is active and
+        hand it to the worker — the call then attributes to the right
+        workflow/agent/step regardless of which thread emits it.
+
         cost_usd is advisory — the Rust processor recomputes it from the
         bundled pricing table before storage. Pass 0.0 if you don't know.
         """
-        ctx = _context.get_current()
+        ctx = context or _context.get_current()
         trace_id = ctx.trace_id if ctx else _context.new_trace_id()
         parent_span_id = ctx.span_id if ctx else None
 
@@ -570,6 +601,108 @@ class ScopeCallSDK:
         )
         self._exporter.enqueue(event)
 
+    # ── capture_context() — portable span handle for worker threads ────
+
+    def capture_context(self) -> "_context.TraceContext | None":
+        """Capture the active ``TraceContext`` as a portable handle.
+
+        ``contextvars`` propagate across ``await`` but NOT into threads
+        spawned by ``ThreadPoolExecutor`` / ``threading.Thread``. Any code
+        that fans LLM calls out across a thread pool (a very common pattern
+        — parallel model calls, map-style batching, multi-agent consensus)
+        loses its parent span the moment work crosses the thread boundary.
+
+        The fix is two lines at the call site: capture on the thread where
+        the span is active, then pass the handle into ``record_llm_call``::
+
+            ctx = sdk.capture_context()          # main thread, inside a span
+            with ThreadPoolExecutor() as ex:
+                ex.submit(do_work, ctx)          # worker thread
+            # inside do_work:
+            sdk.record_llm_call(..., context=ctx)
+
+        Returns ``None`` when called outside any ``sdk.trace()`` block, in
+        which case ``record_llm_call`` falls back to a top-level trace.
+        """
+        return _context.get_current()
+
+    # ── Manual span lifecycle — for callback-style frameworks ──────────
+    #
+    # The `with sdk.agent(...)` form is ideal when a block of code maps to a
+    # span. Callback-based frameworks (LangChain, LlamaIndex) instead fire
+    # discrete start/end events with no enclosing block, often on different
+    # threads. start_span()/end_span() expose the span lifecycle as two
+    # explicit calls so adapters can open on `on_*_start` and close on
+    # `on_*_end`, carrying the returned context across the gap themselves.
+
+    def start_span(
+        self,
+        name: str,
+        *,
+        kind: _context.SpanKind = "agent",
+        parent_context: "_context.TraceContext | None" = None,
+        customer_id: str | None = None,
+        prompt_version: str | None = None,
+        feature_name: str | None = None,
+        user_id: str | None = None,
+        session_id: str | None = None,
+    ) -> "_context.TraceContext":
+        """Build a child span context WITHOUT entering a `with` block.
+
+        Resolves inheritance (trace_id / customer_id / prompt_version) from
+        ``parent_context`` (explicit) or the ambient context, mints a fresh
+        span_id, and stamps the start time. Does NOT push onto the
+        contextvar — the caller owns the returned handle and passes it to
+        ``end_span`` (and to child ``record_llm_call(context=...)`` /
+        nested ``start_span(parent_context=...)``). This is the lifecycle
+        primitive callback adapters build on.
+        """
+        parent = parent_context or _context.get_current()
+
+        resolved_prompt_version = prompt_version
+        if resolved_prompt_version is None and parent is not None:
+            resolved_prompt_version = parent.prompt_version
+        if resolved_prompt_version is None:
+            resolved_prompt_version = self._config.default_prompt_version
+
+        resolved_customer_id = customer_id
+        if resolved_customer_id is None and parent is not None:
+            resolved_customer_id = parent.customer_id
+
+        return _context.TraceContext(
+            trace_id=parent.trace_id if parent else _context.new_trace_id(),
+            span_id=_context.new_span_id(),
+            parent_span_id=parent.span_id if parent else None,
+            name=name,
+            prompt_version=resolved_prompt_version,
+            user_id=user_id,
+            session_id=session_id,
+            customer_id=resolved_customer_id,
+            feature_name=feature_name or name,
+            start_time_ms=time.time() * 1000.0,
+            kind=kind,
+        )
+
+    def end_span(
+        self,
+        ctx: "_context.TraceContext",
+        *,
+        latency_ms: int | None = None,
+        status: str = "success",
+        error_message: str | None = None,
+    ) -> None:
+        """Emit the container event for a span opened with ``start_span``.
+
+        ``latency_ms`` defaults to wall-clock since the span's start time.
+        Container spans (workflow/agent/step) carry zero cost/tokens; the
+        processor enforces this. Safe to call once per ``start_span``.
+        """
+        if ctx is None:
+            return
+        if latency_ms is None:
+            latency_ms = max(0, int(time.time() * 1000.0 - ctx.start_time_ms))
+        self._emit_workflow_event(ctx, latency_ms, status, error_message)
+
     # ── add_redaction_pattern() — extend the default PII redactor ──────
 
     def add_redaction_pattern(
@@ -617,6 +750,24 @@ class ScopeCallSDK:
         self._exporter.close(timeout=timeout)
 
 
+# The most-recently-initialized SDK instance. Framework integrations
+# (LangGraph / LangChain / CrewAI adapters) call get_active() to discover
+# the SDK without the caller having to thread the instance through. The
+# caller-held instance returned by init() remains the canonical handle;
+# this is a convenience for auto-instrumentation entry points.
+_ACTIVE: "ScopeCallSDK | None" = None
+
+
+def get_active() -> "ScopeCallSDK | None":
+    """Return the most-recently-initialized SDK instance, or None.
+
+    Used by framework adapters (e.g. ``scopecall.integrations.langgraph``)
+    so a one-line ``instrument()`` can find the SDK. Returns None before
+    any ``init()`` call, in which case adapters degrade to a no-op.
+    """
+    return _ACTIVE
+
+
 def init(config: ScopeCallConfig | None = None, **kwargs: object) -> ScopeCallSDK:
     """Initialize the SDK. Returns a `ScopeCallSDK` instance.
 
@@ -650,4 +801,7 @@ def init(config: ScopeCallConfig | None = None, **kwargs: object) -> ScopeCallSD
         # immediately instead of being silently ignored.
         config = ScopeCallConfig(**kwargs)  # type: ignore[arg-type]
     validate(config)
-    return ScopeCallSDK(config)
+    global _ACTIVE
+    sdk = ScopeCallSDK(config)
+    _ACTIVE = sdk
+    return sdk

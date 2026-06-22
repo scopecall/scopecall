@@ -22,6 +22,7 @@ import { useBreakdown } from "@/lib/queries/use-breakdown";
 import { useSessions } from "@/lib/queries/use-sessions";
 import { useApiError } from "@/hooks/use-api-error";
 import { useOrgId } from "@/lib/org-context";
+import { OrchestrationFlow } from "@/components/traces/orchestration-flow";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { RelativeTime } from "@/components/shared/relative-time";
 import { CopyButton } from "@/components/shared/copy-button";
@@ -1877,6 +1878,13 @@ function TraceDrawerContent({
               </div>
             </div>
           )}
+
+          {/* Orchestration — animated flow graph: workflow → agent → step →
+              llm, cost-weighted edges, provider-accent nodes, rolled-up
+              cost/latency/calls/errors/retries at each level. */}
+          <Sec title="Orchestration">
+            <OrchestrationFlow spans={spans} selectedId={selId} onSelect={setSelId} />
+          </Sec>
 
           {/* Timeline */}
           <Sec title="Timeline">

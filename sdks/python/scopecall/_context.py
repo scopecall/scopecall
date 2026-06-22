@@ -136,6 +136,31 @@ def pop(token: object) -> None:
     _current_trace.reset(token)  # type: ignore[arg-type]
 
 
+# ── Provider-emit suppression ───────────────────────────────────────────────
+# When a framework adapter (e.g. the LangChain callback) is the source of
+# truth for an LLM call's tokens/cost, the raw provider instrumentation
+# (openai/anthropic/gemini) would ALSO fire for the same underlying call — a
+# duplicate (and, for ChatOpenAI, one with no token usage). The adapter sets
+# this flag for the duration of the call so the raw provider `emit()` no-ops,
+# leaving exactly one richer event. Per-context, so concurrent threaded calls
+# don't interfere (paired with auto's thread-context propagation).
+_suppress_llm_emit: ContextVar[bool] = ContextVar(
+    "scopecall_suppress_llm_emit", default=False
+)
+
+
+def suppress_llm_emit() -> bool:
+    return _suppress_llm_emit.get()
+
+
+def set_suppress_llm_emit(value: bool) -> object:
+    return _suppress_llm_emit.set(value)
+
+
+def reset_suppress_llm_emit(token: object) -> None:
+    _suppress_llm_emit.reset(token)  # type: ignore[arg-type]
+
+
 def new_span_id() -> str:
     """Mint a 16-hex-char span ID (matches the OTel + TS SDK convention).
 

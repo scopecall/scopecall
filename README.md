@@ -232,6 +232,57 @@ sdk.flush()   # ensure the event leaves the process before exit
 
 Open the dashboard and your trace appears within seconds.
 
+### Zero-config auto-instrumentation (Python)
+
+Don't want to wire `instrument()` / `workflow()` calls by hand? Add **one
+import** at the top of your app — New Relic / Datadog style — and ScopeCall
+auto-instruments your LLM stack as it's imported:
+
+```bash
+pip install "scopecall-py[auto]"        # pulls wrapt for import hooks
+```
+
+```python
+import scopecall.auto   # ← the only line you add (must be first)
+# ... the rest of your app, unchanged ...
+```
+
+```bash
+export SCOPECALL_API_KEY=sc_live_...                       # enables it; unset = no-op
+export SCOPECALL_ENDPOINT=http://localhost:8080/v1/ingest
+```
+
+On import it auto-inits the SDK from the environment and, via post-import
+hooks, instruments each library the moment your app imports it:
+
+- **OpenAI / Anthropic** clients — every instance, no `instrument()` call
+- **Google Gemini** (`google-generativeai`) — `generate_content` (sync/async),
+  including gemini-3 "thinking"-token accounting
+- **LangChain** (`ChatOpenAI` etc.) — token usage read from `usage_metadata`
+- **LangGraph** — every node becomes an `agent` span; each run a `workflow`
+- **Thread-safe** — context propagates across `ThreadPoolExecutor`, so
+  parallel / multi-agent-consensus calls attribute correctly (no orphans)
+
+The explicit API (`init` / `instrument` / `workflow`) still works and
+composes — auto is the convenience layer, not a replacement. To keep a named
+workflow + `customer_id`, just open one span yourself; auto won't double-wrap:
+
+```python
+import scopecall, scopecall.auto
+with scopecall.get_active().workflow("refund-bot", customer_id="customer_acme"):
+    run_my_agent(...)   # all LLM calls inside attribute here, automatically
+```
+
+### Works with any framework — OpenTelemetry GenAI bridge
+
+Anything already emitting OpenTelemetry GenAI spans (via OpenLLMetry /
+OpenInference auto-instrumentors for LangChain, LlamaIndex, Bedrock, Vertex,
+CrewAI, …) can point its **OTLP/HTTP exporter at `POST /v1/traces`** with
+`Authorization: Bearer sc_live_...`. Spans carrying `gen_ai.*` attributes are
+mapped to ScopeCall events — traces, orchestration, and server-side cost
+attribution with zero ScopeCall-specific code. See
+[`docs/universal-instrumentation.md`](docs/universal-instrumentation.md).
+
 ---
 
 ## Architecture
@@ -275,6 +326,18 @@ all reads go through the Go API.
 | **v0.5.0** | Native LangChain + LlamaIndex framework integrations (Python + TypeScript) |
 | **v0.6.0** | Budget enforcement — alert, soft-block, model fallback |
 | **v0.7.0** | Agent execution debugger — visual step tree for multi-step agents |
+
+> **This branch (`feat/universal-auto-instrumentation`)** pulls several roadmap
+> items forward as a "universal instrumentation" layer (see
+> [`docs/universal-instrumentation.md`](docs/universal-instrumentation.md)):
+> **Gemini** auto-instrumentation, **`scopecall.auto`** zero-config agent
+> (post-import hooks + cross-thread context propagation), **LangGraph** node→agent
+> auto-instrumentation, **LangChain** callback token capture, an **OpenTelemetry
+> GenAI `/v1/traces` ingest bridge** (Rust), a dashboard **Orchestration** flow
+> view, fine-tuned-model pricing prefix-match, and a refreshed pricing table
+> (gemini-3.x, gpt-5.x, claude-opus-4-8). TypeScript core parity
+> (`getActive` / `captureContext` / `parentContext` / manual span API +
+> LangChain handler).
 
 ---
 

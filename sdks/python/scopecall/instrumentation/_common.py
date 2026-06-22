@@ -125,6 +125,11 @@ def build_llm_event(
     feature_name = (ctx.feature_name if ctx else None) or config.default_feature
     user_id = (ctx.user_id if ctx else None) or config.default_user_id
     session_id = (ctx.session_id if ctx else None) or config.default_session_id
+    # customer_id inherits from the active trace context — same precedence as
+    # record_llm_call(). Without this, auto-instrumented provider calls
+    # (OpenAI/Anthropic/Gemini) dropped the B2B tenant attribution that
+    # sdk.workflow(customer_id=...) set on the enclosing span.
+    customer_id = ctx.customer_id if ctx else None
     prompt_version = (
         (ctx.prompt_version if ctx else None) or config.default_prompt_version
     )
@@ -152,6 +157,7 @@ def build_llm_event(
         feature_name=feature_name,
         user_id=user_id,
         session_id=session_id,
+        customer_id=customer_id,
         environment=config.environment,
         sdk_version=__version__,
         extra=extra,
@@ -164,8 +170,16 @@ def build_llm_event(
 
 
 def emit(sdk: ScopeCallSDK, event: LLMEvent) -> None:
-    """Send a built event to the exporter. Single chokepoint so a
-    future logging / sampling layer has one place to hook in."""
+    """Send a built event to the exporter. Single chokepoint for the raw
+    provider instrumentations (openai/anthropic/gemini).
+
+    Honors the provider-emit suppression flag: when a framework adapter (the
+    LangChain callback) is already capturing this exact call as the source of
+    truth, the raw provider event would be a duplicate, so we drop it here.
+    The adapter's own events go through record_llm_call/start_span →
+    exporter.enqueue directly, so they are unaffected."""
+    if _context.suppress_llm_emit():
+        return
     sdk._exporter.enqueue(event)
 
 

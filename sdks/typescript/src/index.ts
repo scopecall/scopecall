@@ -85,6 +85,32 @@ export interface ScopeCallSDK {
    */
   instrument(client: unknown, provider?: "openai" | "anthropic" | "vercel-ai"): void;
 
+  /**
+   * Capture the active context as a portable handle (worker / framework
+   * adapter use). Parity with the Python SDK's `capture_context()`.
+   */
+  captureContext(): TraceContext | undefined;
+
+  /**
+   * Open a span manually, WITHOUT a `with`/callback block — for
+   * callback-style frameworks (LangChain) that fire discrete start/end
+   * events. Returns the new context; pass it to `endSpan` and to child
+   * `recordLlmCall({ context })` / nested `startSpan({ parentContext })`.
+   * Parity with the Python SDK's `start_span()`.
+   */
+  startSpan(name: string, opts?: StartSpanOpts): TraceContext;
+
+  /** Emit the container event for a span opened with `startSpan`. */
+  endSpan(ctx: TraceContext, opts?: EndSpanOpts): void;
+
+  /**
+   * Manually record an LLM call as if a provider instrumentation had — the
+   * escape hatch for framework adapters / custom wrappers. Parity with the
+   * Python SDK's `record_llm_call()`. Parent resolves from `args.context`
+   * (explicit) or the ambient context.
+   */
+  recordLlmCall(args: RecordLlmCallArgs): void;
+
   /** Flush all queued events synchronously. Resolves when queue is empty. */
   flush(timeoutMs?: number): Promise<void>;
 
@@ -93,6 +119,44 @@ export interface ScopeCallSDK {
 
   /** True if the SDK was initialised with disabled:true */
   readonly disabled: boolean;
+}
+
+export interface StartSpanOpts {
+  kind?: "workflow" | "agent" | "step";
+  parentContext?: TraceContext | null;
+  customerId?: string | null;
+  promptVersion?: string | null;
+}
+
+export interface EndSpanOpts {
+  latencyMs?: number;
+  status?: LLMEvent["status"];
+  errorMessage?: string | null;
+}
+
+export interface RecordLlmCallArgs {
+  model: string;
+  provider: string;
+  inputTokens?: number;
+  outputTokens?: number;
+  latencyMs?: number;
+  ttftMs?: number | null;
+  status?: LLMEvent["status"];
+  costUsd?: number;
+  errorMessage?: string | null;
+  inputText?: string | null;
+  outputText?: string | null;
+  featureName?: string | null;
+  userId?: string | null;
+  sessionId?: string | null;
+  customerId?: string | null;
+  promptVersion?: string | null;
+  finishReason?: string | null;
+  toolCalls?: string | null;
+  attemptNumber?: number;
+  retryReason?: LLMEvent["retry_reason"];
+  /** Explicit parent context (from captureContext) — overrides the ambient. */
+  context?: TraceContext | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -104,6 +168,16 @@ let _instance: ScopeCallSDK | null = null;
 /** @internal — exposed for testing only */
 export function _resetInstance(): void {
   _instance = null;
+}
+
+/**
+ * Return the most-recently-initialised SDK instance, or `undefined` before
+ * any `init()` call. Framework adapters use this to discover the SDK
+ * without the caller threading the instance through. Parity with the
+ * Python SDK's `scopecall.get_active()`. (universal-instrumentation)
+ */
+export function getActive(): ScopeCallSDK | undefined {
+  return _instance ?? undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -218,6 +292,86 @@ export function init(config: ScopeCallConfig = {}): ScopeCallSDK {
       }
     },
 
+    captureContext(): TraceContext | undefined {
+      return storage.getStore();
+    },
+
+    startSpan(name: string, opts?: StartSpanOpts): TraceContext {
+      const parent = opts?.parentContext ?? storage.getStore();
+      const promptVersion =
+        opts && "promptVersion" in opts
+          ? (opts.promptVersion ?? null)
+          : (parent?.promptVersion ?? config.defaultPromptVersion ?? null);
+      const customerId =
+        opts && "customerId" in opts
+          ? (opts.customerId ?? null)
+          : (parent?.customerId ?? null);
+      return {
+        traceId: parent?.traceId ?? randomUUID(),
+        spanId: randomUUID(),
+        parentSpanId: parent?.spanId ?? null,
+        name,
+        promptVersion,
+        kind: opts?.kind ?? "agent",
+        customerId,
+      };
+    },
+
+    endSpan(ctx: TraceContext, opts?: EndSpanOpts): void {
+      exporter.enqueue(
+        buildWorkflowEvent({
+          ctx,
+          latencyMs: opts?.latencyMs ?? 0,
+          status: opts?.status ?? "success",
+          errorMessage: opts?.errorMessage ?? null,
+          config,
+        }),
+      );
+    },
+
+    recordLlmCall(args: RecordLlmCallArgs): void {
+      const parent = args.context ?? storage.getStore();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sdkVersion: string =
+        typeof (__SDK_VERSION__ as any) !== "undefined" ? (__SDK_VERSION__ as string) : "0.0.0";
+      const latencyMs = args.latencyMs ?? 0;
+      exporter.enqueue({
+        span_id: randomUUID(),
+        trace_id: parent?.traceId ?? randomUUID(),
+        parent_span_id: parent?.spanId ?? null,
+        timestamp: Date.now() - latencyMs,
+        latency_ms: latencyMs,
+        ttft_ms: args.ttftMs ?? null,
+        model: args.model,
+        provider: args.provider,
+        input_tokens: args.inputTokens ?? 0,
+        output_tokens: args.outputTokens ?? 0,
+        cost_usd: args.costUsd ?? 0,
+        status: args.status ?? "success",
+        error_message: args.errorMessage ?? null,
+        input_text: args.inputText ?? "",
+        output_text: args.outputText ?? "",
+        feature_name: args.featureName ?? parent?.name ?? config.defaultFeature ?? null,
+        user_id: args.userId ?? config.defaultUserId ?? null,
+        session_id: args.sessionId ?? config.defaultSessionId ?? null,
+        customer_id: args.customerId ?? parent?.customerId ?? null,
+        environment: config.environment ?? "production",
+        sdk_version: sdkVersion,
+        extra: null,
+        finish_reason: args.finishReason ?? null,
+        cache_read_tokens: null,
+        original_model: null,
+        budget_state: null,
+        failure_mode: null,
+        tool_calls: args.toolCalls ?? null,
+        prompt_version: args.promptVersion ?? parent?.promptVersion ?? config.defaultPromptVersion ?? null,
+        kind: "llm",
+        attempt_number: args.attemptNumber ?? 1,
+        retry_reason: args.retryReason ?? null,
+        is_test: resolveTestFlag(config),
+      });
+    },
+
     async flush(timeoutMs?: number): Promise<void> {
       return exporter.flush(timeoutMs);
     },
@@ -260,6 +414,20 @@ function makeDisabledSDK(): ScopeCallSDK {
     agent: traceWithKind("agent"),
     step: traceWithKind("step"),
     instrument(): void { /* no-op */ },
+    captureContext(): TraceContext | undefined { return storage.getStore(); },
+    startSpan(name: string, opts?: StartSpanOpts): TraceContext {
+      return {
+        traceId: randomUUID(),
+        spanId: randomUUID(),
+        parentSpanId: opts?.parentContext?.spanId ?? null,
+        name,
+        promptVersion: opts?.promptVersion ?? null,
+        kind: opts?.kind ?? "agent",
+        customerId: opts?.customerId ?? null,
+      };
+    },
+    endSpan(): void { /* no-op */ },
+    recordLlmCall(): void { /* no-op */ },
     async flush(): Promise<void> { /* no-op */ },
     async close(): Promise<void> { /* no-op */ },
   };
@@ -267,6 +435,10 @@ function makeDisabledSDK(): ScopeCallSDK {
 
 // Re-export trace standalone for users who don't need the full SDK object
 export { contextTrace as trace };
+
+// Portable context capture for worker / framework-adapter use (parity with
+// the Python SDK). Pair with trace(name, fn, { parentContext }).
+export { captureContext } from "./context.js";
 
 // ─── Container-span emission ─────────────────────────────────────────────
 //

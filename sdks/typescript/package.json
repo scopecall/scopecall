@@ -46,6 +46,26 @@
         "types": "./dist/register.d.cts",
         "default": "./dist/register.cjs"
       }
+    },
+    "./integrations": {
+      "import": {
+        "types": "./dist/integrations/index.d.ts",
+        "default": "./dist/integrations/index.js"
+      },
+      "require": {
+        "types": "./dist/integrations/index.d.cts",
+        "default": "./dist/integrations/index.cjs"
+      }
+    },
+    "./integrations/langchain": {
+      "import": {
+        "types": "./dist/integrations/langchain.d.ts",
+        "default": "./dist/integrations/langchain.js"
+      },
+      "require": {
+        "types": "./dist/integrations/langchain.d.cts",
+        "default": "./dist/integrations/langchain.cjs"
+      }
     }
   },
   "main": "./dist/index.cjs",

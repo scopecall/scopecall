@@ -144,6 +144,23 @@ impl Pricer {
         if let Some(canonical) = self.aliases.get(model) {
             return canonical.as_str();
         }
+        // Fine-tuned models carry an org/project/job suffix appended to the
+        // base fine-tune id, e.g.
+        //   ft:gpt-4.1-2025-04-14:acme:proj:DHDwGW6t
+        // The pricing table keys the base (`ft:gpt-4.1-2025-04-14`), so an
+        // exact match misses. Match the LONGEST pricing-table key that is a
+        // prefix of the model so the base fine-tune rate applies. Scoped to
+        // `ft:` ids to avoid accidental prefix collisions on base models.
+        if model.starts_with("ft:") && !self.models.contains_key(model) {
+            if let Some(key) = self
+                .models
+                .keys()
+                .filter(|k| k.starts_with("ft:") && model.starts_with(k.as_str()))
+                .max_by_key(|k| k.len())
+            {
+                return key.as_str();
+            }
+        }
         model
     }
 

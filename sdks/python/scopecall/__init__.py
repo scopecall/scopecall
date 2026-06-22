@@ -67,12 +67,13 @@ Migrating from scopecall v0.1.x:
 
 from ._config import ConfigError, ScopeCallConfig
 from ._context import TraceContext
-from ._sdk import ScopeCallSDK, init
+from ._sdk import ScopeCallSDK, get_active, init
 from ._version import __version__
 from .wire._event import LLMEvent
 
 __all__ = [
     "init",
+    "get_active",
     "ScopeCallSDK",
     "ScopeCallConfig",
     "ConfigError",

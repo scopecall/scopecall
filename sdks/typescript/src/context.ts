@@ -68,9 +68,29 @@ export interface TraceOptions {
    * Distinct from user_id (end-user). (v0.3)
    */
   customerId?: string | null;
+  /**
+   * Explicit parent context, used INSTEAD of the ambient
+   * AsyncLocalStorage store to resolve the parent. AsyncLocalStorage
+   * already propagates across `await`, so this is for the manual /
+   * worker / framework-adapter case where you captured a context
+   * elsewhere (via `captureContext()`) and want a new span parented to
+   * it regardless of the current async context. Mirrors the Python SDK's
+   * `parent_context=`. (universal-instrumentation)
+   */
+  parentContext?: TraceContext | null;
 }
 
 export const storage = new AsyncLocalStorage<TraceContext>();
+
+/**
+ * Capture the active TraceContext as a portable handle, or `undefined`
+ * outside any trace. Hand it to `trace(name, fn, { parentContext })` to
+ * parent a span explicitly — the parity counterpart of the Python SDK's
+ * `sdk.capture_context()`.
+ */
+export function captureContext(): TraceContext | undefined {
+  return storage.getStore();
+}
 
 /**
  * Run `fn` within a new trace span.
@@ -96,7 +116,9 @@ export async function trace<T>(
   fn: (ctx: TraceContext) => Promise<T>,
   opts?: TraceOptions,
 ): Promise<T> {
-  const parent = storage.getStore();
+  // Parent resolution: an explicit opts.parentContext wins over the
+  // ambient AsyncLocalStorage store (the worker / adapter case).
+  const parent = opts?.parentContext ?? storage.getStore();
   // promptVersion precedence: explicit opts arg → parent's value → null.
   // We use the in-key check so passing `{ promptVersion: null }` is an
   // intentional "clear it" rather than "use parent's".
