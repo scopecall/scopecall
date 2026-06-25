@@ -269,6 +269,78 @@ export default function V2OverviewPage() {
         </div>
       </section>
 
+      {/* ── WASTE INBOX · the dominant, top-of-page feature ──────────────────── */}
+      <section id="waste" className="relative overflow-hidden rounded-xl ring-1 ring-amber-500/25 bg-card">
+        <div className="absolute inset-0 bg-gradient-to-br from-amber-500/[0.10] via-transparent to-transparent pointer-events-none" />
+        <div className="absolute left-0 inset-y-0 w-1 bg-gradient-to-b from-amber-400 to-amber-600" />
+        <div className="relative p-5 pl-6">
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div>
+              <h2 className="text-base font-semibold flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-amber-400" /> Waste Inbox
+                {wasteItems.length > 0 && (
+                  <span className="text-[11px] font-medium border border-amber-500/30 bg-amber-500/15 text-amber-700 dark:text-amber-300 rounded px-1.5 py-0.5">
+                    {wasteItems.length} {wasteItems.length === 1 ? "finding" : "findings"}
+                  </span>
+                )}
+              </h2>
+              <p className="text-[12px] text-muted-foreground mt-0.5">
+                Specific spend and failures you could cut today — ranked by impact.
+              </p>
+            </div>
+            {wasteCeiling > 0 && (
+              <div className="text-right shrink-0">
+                <div className="text-3xl font-semibold tabular-nums leading-none text-amber-600 dark:text-amber-300">
+                  up to {money(wasteCeiling)}
+                </div>
+                <div className="text-[10px] text-muted-foreground uppercase tracking-wider mt-1">
+                  recoverable · this window
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="mt-4">
+            {wasteQ.isLoading ? (
+              <RowsSkeleton />
+            ) : wasteItems.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-border bg-card/40 p-5 text-center">
+                <p className="text-sm text-foreground">Nothing wasteful detected in this window.</p>
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Retry burns, model misuse, and error storms surface here the moment they happen.
+                </p>
+              </div>
+            ) : (
+              <ul className="space-y-1">
+                {visibleWaste.map((w, i) => (
+                  <WasteRow key={i} item={w} onOpenTraces={drill} scope={globalScopeQuery(sp)} />
+                ))}
+                {hiddenWaste > 0 && (
+                  <li>
+                    <button
+                      onClick={() => setShowAllWaste(true)}
+                      className="w-full text-center text-[11px] text-muted-foreground hover:text-foreground py-1.5 rounded row-interactive"
+                    >
+                      Show {hiddenWaste} more
+                    </button>
+                  </li>
+                )}
+                {showAllWaste && wasteItems.length > WASTE_TOP && (
+                  <li>
+                    <button
+                      onClick={() => setShowAllWaste(false)}
+                      className="w-full text-center text-[11px] text-muted-foreground hover:text-foreground py-1.5 rounded row-interactive"
+                    >
+                      Show less
+                    </button>
+                  </li>
+                )}
+              </ul>
+            )}
+          </div>
+        </div>
+      </section>
+
       {/* ── ROW 2 · THREE DECISION TILES ───────────────────────────────────── */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* SPEND */}
@@ -358,8 +430,8 @@ export default function V2OverviewPage() {
         </Tile>
       </div>
 
-      {/* ── ROW 3 · WHAT CHANGED + WASTE INBOX ─────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {/* ── ROW 3 · WHAT CHANGED ───────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 gap-4">
         {/* What changed */}
         <section id="changed" className="rounded-xl ring-1 ring-foreground/10 bg-card">
           <div className="px-4 pt-4 pb-2">
@@ -389,63 +461,6 @@ export default function V2OverviewPage() {
           )}
         </section>
 
-        {/* Waste Inbox */}
-        <section id="waste" className="rounded-xl ring-1 ring-foreground/10 bg-card">
-          <div className="px-4 pt-4 pb-2 flex items-start justify-between gap-3">
-            <div>
-              <h2 className="text-sm font-semibold flex items-center gap-2">
-                <Sparkles className="h-3.5 w-3.5 text-amber-400" /> Waste Inbox
-                <span className="text-[10px] font-normal border border-border rounded px-1.5 py-0 h-4 inline-flex items-center">
-                  {wasteItems.length}
-                </span>
-              </h2>
-              <p className="text-[11px] text-muted-foreground">
-                Specific spend you could cut today, ranked by savings
-              </p>
-            </div>
-            {wasteCeiling > 0 && (
-              <div className="text-right shrink-0">
-                <div className="text-sm font-semibold tabular-nums text-amber-300">
-                  up to {money(wasteCeiling)}
-                </div>
-                <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                  potential
-                </div>
-              </div>
-            )}
-          </div>
-          {wasteQ.isLoading ? (
-            <RowsSkeleton />
-          ) : wasteItems.length === 0 ? (
-            <EmptyRow text="Nothing wasteful detected — nice." />
-          ) : (
-            <ul className="px-2 pb-2 space-y-1">
-              {visibleWaste.map((w, i) => (
-                <WasteRow key={i} item={w} onOpenTraces={drill} scope={globalScopeQuery(sp)} />
-              ))}
-              {hiddenWaste > 0 && (
-                <li>
-                  <button
-                    onClick={() => setShowAllWaste(true)}
-                    className="w-full text-center text-[11px] text-muted-foreground hover:text-foreground py-1.5 rounded row-interactive"
-                  >
-                    Show {hiddenWaste} more
-                  </button>
-                </li>
-              )}
-              {showAllWaste && wasteItems.length > WASTE_TOP && (
-                <li>
-                  <button
-                    onClick={() => setShowAllWaste(false)}
-                    className="w-full text-center text-[11px] text-muted-foreground hover:text-foreground py-1.5 rounded row-interactive"
-                  >
-                    Show less
-                  </button>
-                </li>
-              )}
-            </ul>
-          )}
-        </section>
       </div>
 
       {/* ── ROW 4 · WHERE THE MONEY GOES ───────────────────────────────────── */}

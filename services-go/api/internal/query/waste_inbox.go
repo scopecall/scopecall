@@ -266,8 +266,7 @@ WHERE l.org_id = {org_id:String}
 GROUP BY workflow
 HAVING total_calls >= 10
    AND error_calls / total_calls > 0.05
-   AND error_cost > 0.001
-ORDER BY error_cost DESC
+ORDER BY error_calls DESC
 LIMIT 5`
 		rows, err := ch.Query(ctx, q,
 			driver.NamedValue{Name: "org_id", Value: orgID},
@@ -289,13 +288,24 @@ LIMIT 5`
 			if wfLabel == "" {
 				wfLabel = "(unattributed)"
 			}
-			rate := float64(errCalls) / float64(totalCalls) * 100
+			rateFrac := float64(errCalls) / float64(totalCalls)
+			// Error storms are waste even when the failed calls are free (a
+			// deprecated model, quota limit, or bad payload that 404s/errors
+			// before burning tokens). Severity tracks the FAILURE RATE, not
+			// just recoverable dollars — a 1-in-4 failure rate is a high-sev
+			// reliability problem regardless of its $ cost.
+			sev := severity(errCost, grand)
+			if rateFrac >= 0.25 {
+				sev = "high"
+			} else if rateFrac >= 0.10 && sev == "low" {
+				sev = "medium"
+			}
 			items = append(items, WasteItem{
 				Kind:                "high_error_workflow",
-				Severity:            severity(errCost, grand),
-				Headline:            fmt.Sprintf("%s has a %.0f%% error rate — %d/%d calls", wfLabel, rate, errCalls, totalCalls),
-				Detail:              "Errored calls still cost money — provider charges for tokens even when the response is unusable.",
-				Recommendation:      "Filter Traces to this workflow + status=error, inspect error_message to find the prompt/payload triggering it.",
+				Severity:            sev,
+				Headline:            fmt.Sprintf("%s is failing %.0f%% of calls — %d/%d errored", wfLabel, rateFrac*100, errCalls, totalCalls),
+				Detail:              "Failing calls waste latency and produce unusable output, and failures often trigger paid retries. Surfaced regardless of the failed call's own token cost.",
+				Recommendation:      "Filter Traces to this workflow + status=error and read error_message — a deprecated/renamed model, quota limit, or bad payload is the usual cause.",
 				PotentialSavingsUSD: errCost,
 				Workflow:            wf,
 			})
