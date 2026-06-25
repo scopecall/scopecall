@@ -17,6 +17,7 @@ type wasteItemJSON struct {
 	Detail              string  `json:"detail"`
 	Recommendation      string  `json:"recommendation"`
 	PotentialSavingsUSD float64 `json:"potential_savings_usd"`
+	WastedCalls         int     `json:"wasted_calls,omitempty"`
 	Workflow            string  `json:"workflow,omitempty"`
 	Model               string  `json:"model,omitempty"`
 	Step                string  `json:"step,omitempty"`
@@ -74,6 +75,7 @@ func (s *Server) GetWasteInboxHTTP(w http.ResponseWriter, r *http.Request) {
 			Detail:              it.Detail,
 			Recommendation:      it.Recommendation,
 			PotentialSavingsUSD: it.PotentialSavingsUSD,
+			WastedCalls:         it.WastedCalls,
 			Workflow:            it.Workflow,
 			Model:               it.Model,
 			Step:                it.Step,

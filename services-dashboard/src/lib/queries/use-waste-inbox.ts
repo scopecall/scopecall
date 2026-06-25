@@ -13,6 +13,11 @@ export interface WasteItem {
   detail: string;
   recommendation: string;
   potential_savings_usd: number;
+  /** Calls this finding deems wasted (retried or errored). Lets the UI show an
+   * impact line when there are no recoverable dollars — e.g. an error storm on
+   * a free/deprecated model that 404s before burning tokens. Absent (0) for
+   * model_misuse. */
+  wasted_calls?: number;
   workflow?: string;
   model?: string;
   step?: string;

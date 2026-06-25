@@ -665,11 +665,31 @@ function WasteRow({
             )}
           </span>
           <span className="block text-[11px] text-muted-foreground mt-0.5">
-            Save up to{" "}
-            <span className="text-amber-300 font-medium tabular-nums">
-              {money(item.potential_savings_usd)}
-            </span>{" "}
-            in this window
+            {item.potential_savings_usd >= 0.005 ? (
+              <>
+                Save up to{" "}
+                <span className="text-amber-300 font-medium tabular-nums">
+                  {money(item.potential_savings_usd)}
+                </span>{" "}
+                in this window
+              </>
+            ) : item.wasted_calls ? (
+              <>
+                <span className="text-amber-300 font-medium tabular-nums">
+                  {item.wasted_calls}
+                </span>{" "}
+                wasted {item.wasted_calls === 1 ? "call" : "calls"} · no billable
+                spend
+              </>
+            ) : (
+              <>
+                Save up to{" "}
+                <span className="text-amber-300 font-medium tabular-nums">
+                  {money(item.potential_savings_usd)}
+                </span>{" "}
+                in this window
+              </>
+            )}
           </span>
         </span>
         {open ? (

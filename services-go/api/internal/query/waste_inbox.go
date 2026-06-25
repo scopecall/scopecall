@@ -32,6 +32,13 @@ type WasteItem struct {
 	Detail              string
 	Recommendation      string
 	PotentialSavingsUSD float64
+	// WastedCalls is the count of calls this finding deems wasted (retried or
+	// errored). It lets the frontend render an impact line even when the
+	// finding has no recoverable dollars — e.g. an error storm on a free,
+	// deprecated model 404s before burning tokens, so PotentialSavingsUSD is
+	// $0 but the reliability waste is real. 0 for model_misuse (a pure dollar
+	// finding, not a per-call one).
+	WastedCalls int
 	// Optional structured evidence so the frontend can render badges/links
 	// without parsing Headline strings.
 	Workflow string
@@ -126,6 +133,7 @@ LIMIT 5`
 				Detail:              fmt.Sprintf("%d/%d calls retried — cost spent on duplicate work that didn't change the outcome.", retryCalls, totalCalls),
 				Recommendation:      "Inspect the retry_reason on these calls. If rate_limit dominates, batch or back off; if server_error, the prompt may be triggering provider validation.",
 				PotentialSavingsUSD: retryCost,
+				WastedCalls:         int(retryCalls),
 				Workflow:            wf,
 				Model:               model,
 			})
@@ -307,6 +315,7 @@ LIMIT 5`
 				Detail:              "Failing calls waste latency and produce unusable output, and failures often trigger paid retries. Surfaced regardless of the failed call's own token cost.",
 				Recommendation:      "Filter Traces to this workflow + status=error and read error_message — a deprecated/renamed model, quota limit, or bad payload is the usual cause.",
 				PotentialSavingsUSD: errCost,
+				WastedCalls:         int(errCalls),
 				Workflow:            wf,
 			})
 		}
