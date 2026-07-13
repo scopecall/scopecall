@@ -38,6 +38,7 @@ function makeEvent(override?: Partial<LLMEvent>): LLMEvent {
     user_id: null,
     session_id: null,
     environment: "test",
+    project: "",
     sdk_version: "0.1.0",
     extra: null,
     finish_reason: null,

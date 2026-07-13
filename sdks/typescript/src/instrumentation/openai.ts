@@ -406,6 +406,7 @@ function buildEvent(args: BuildEventArgs): LLMEvent {
     attempt_number: 1,
     retry_reason: null,
     environment: config.environment ?? "production",
+    project: config.project ?? "",
     sdk_version: sdkVersion,
     extra: null,
     finish_reason: result?.choices[0]?.finish_reason ?? null,

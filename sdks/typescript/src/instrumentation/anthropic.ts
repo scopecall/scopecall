@@ -400,6 +400,7 @@ function buildEvent(args: BuildEventArgs): LLMEvent {
     attempt_number: 1,
     retry_reason: null,
     environment: config.environment ?? "production",
+    project: config.project ?? "",
     sdk_version: sdkVersion,
     extra: null,
     // Map Anthropic's stop_reason into our cross-provider finish_reason field.

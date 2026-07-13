@@ -22,6 +22,7 @@
  *   SCOPECALL_DEBUG        — "1" or "true" → ConsoleTransport (overrides apiKey)
  *   SCOPECALL_OUTPUT       — file path → FileTransport
  *   SCOPECALL_ENVIRONMENT  — deployment environment label (default: "production")
+ *   SCOPECALL_PROJECT      — application/service label (default: unassigned)
  *   SCOPECALL_DISABLED     — "1" or "true" → disabled no-op mode
  */
 
@@ -40,6 +41,7 @@ if (debug || env.SCOPECALL_OUTPUT || env.SCOPECALL_API_KEY || disabled) {
     debug,
     output: env.SCOPECALL_OUTPUT,
     environment: env.SCOPECALL_ENVIRONMENT ?? "production",
+    project: env.SCOPECALL_PROJECT,
     disabled,
   });
 }

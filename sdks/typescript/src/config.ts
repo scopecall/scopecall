@@ -23,6 +23,8 @@ export interface ScopeCallConfig {
   transport?: Transport;
   /** deployment environment label */
   environment?: string;
+  /** Application/service label (e.g. "sp-optimizer"), orthogonal to environment. "" = unassigned. */
+  project?: string;
   /** Redact PII from input_text / output_text. Set false to disable entirely. */
   redact?: boolean | { additionalPatterns?: Array<{ name: string; regex: string }> };
   /** Capture LLM input/output text. Default true. */

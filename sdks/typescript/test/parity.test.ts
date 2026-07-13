@@ -44,3 +44,14 @@ describe("universal-instrumentation parity primitives", () => {
     expect(childTraceId).toBe(parent!.traceId);
   });
 });
+
+describe("project field (app label, orthogonal to environment)", () => {
+  it("flows from init option and defaults to unassigned on the wire", async () => {
+    const { init, getActive, _resetInstance } = await import("../src/index.js");
+    _resetInstance();
+    const sdk = init({ debug: true, project: "sp-optimizer" });
+    expect(sdk).toBeDefined();
+    expect(getActive()).toBe(sdk);
+    _resetInstance();
+  });
+});

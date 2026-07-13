@@ -66,6 +66,8 @@ export interface LLMEvent {
 
   // Metadata
   environment: string;
+  /** Application/service label, orthogonal to environment. "" = unassigned. */
+  project: string;
   sdk_version: string; // injected at build time via __SDK_VERSION__
 
   // Framework-specific extras — always JSON.stringify'd before storage; never a raw object

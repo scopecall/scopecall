@@ -1,14 +1,21 @@
 {
   "_meta": {
-    "last_verified": "2026-05-25",
+    "last_verified": "2026-07-02",
     "note": "Single source of truth for token pricing. Update last_verified when refreshing. CI fails if > 30 days stale."
   },
   "models": {
+    "gpt-5.5":              { "input_price_per_1k_tokens": 0.00500,  "output_price_per_1k_tokens": 0.03000, "cache_read_price_per_1k_tokens": 0.00050 },
+    "gpt-5.4":              { "input_price_per_1k_tokens": 0.00250,  "output_price_per_1k_tokens": 0.01500 },
+    "gpt-5.1":              { "input_price_per_1k_tokens": 0.00125,  "output_price_per_1k_tokens": 0.01000 },
+    "gpt-5":                { "input_price_per_1k_tokens": 0.000625, "output_price_per_1k_tokens": 0.00500 },
+    "ft:gpt-4.1-2025-04-14": { "input_price_per_1k_tokens": 0.00800, "output_price_per_1k_tokens": 0.03200, "cache_read_price_per_1k_tokens": 0.00200 },
     "gpt-4o":               { "input_price_per_1k_tokens": 0.0025,   "output_price_per_1k_tokens": 0.01000 },
     "gpt-4o-mini":          { "input_price_per_1k_tokens": 0.00015,  "output_price_per_1k_tokens": 0.00060 },
     "gpt-4-turbo":          { "input_price_per_1k_tokens": 0.01000,  "output_price_per_1k_tokens": 0.03000 },
     "gpt-4":                { "input_price_per_1k_tokens": 0.03000,  "output_price_per_1k_tokens": 0.06000 },
     "gpt-3.5-turbo":        { "input_price_per_1k_tokens": 0.00050,  "output_price_per_1k_tokens": 0.00150 },
+    "claude-fable-5":           { "input_price_per_1k_tokens": 0.01000,  "output_price_per_1k_tokens": 0.05000 },
+    "claude-opus-4-8":          { "input_price_per_1k_tokens": 0.00500,  "output_price_per_1k_tokens": 0.02500, "cache_read_price_per_1k_tokens": 0.00050 },
     "claude-opus-4-7":          { "input_price_per_1k_tokens": 0.01500,  "output_price_per_1k_tokens": 0.07500 },
     "claude-sonnet-4-6":        { "input_price_per_1k_tokens": 0.00300,  "output_price_per_1k_tokens": 0.01500 },
     "claude-haiku-4-5":         { "input_price_per_1k_tokens": 0.00025,  "output_price_per_1k_tokens": 0.00125 },
@@ -19,7 +26,13 @@
     "claude-3-haiku":       { "input_price_per_1k_tokens": 0.00025,  "output_price_per_1k_tokens": 0.00125 },
     "gemini-1.5-pro":       { "input_price_per_1k_tokens": 0.00125,  "output_price_per_1k_tokens": 0.00500 },
     "gemini-1.5-flash":     { "input_price_per_1k_tokens": 0.000075, "output_price_per_1k_tokens": 0.00030 },
-    "gemini-2.0-flash":     { "input_price_per_1k_tokens": 0.00010,  "output_price_per_1k_tokens": 0.00040 }
+    "gemini-2.0-flash":     { "input_price_per_1k_tokens": 0.00010,  "output_price_per_1k_tokens": 0.00040 },
+    "gemini-3.1-pro-preview": { "input_price_per_1k_tokens": 0.00200,  "output_price_per_1k_tokens": 0.01200, "cache_read_price_per_1k_tokens": 0.00020 },
+    "gemini-3.5-flash":       { "input_price_per_1k_tokens": 0.00150,  "output_price_per_1k_tokens": 0.00900 },
+    "gemini-3-pro-preview":   { "input_price_per_1k_tokens": 0.00200,  "output_price_per_1k_tokens": 0.01200 },
+    "gemini-3-flash-preview": { "input_price_per_1k_tokens": 0.00050,  "output_price_per_1k_tokens": 0.00300 },
+    "deepseek-v4-flash":      { "input_price_per_1k_tokens": 0.00014,  "output_price_per_1k_tokens": 0.00028, "cache_read_price_per_1k_tokens": 0.0000028 },
+    "deepseek-v4-pro":        { "input_price_per_1k_tokens": 0.000435, "output_price_per_1k_tokens": 0.00087, "cache_read_price_per_1k_tokens": 0.000003625 }
   },
   "aliases": {
     "gpt-4o-2024-11-20":            "gpt-4o",
@@ -36,6 +49,9 @@
     "claude-3-5-haiku-20241022":    "claude-3-5-haiku",
     "claude-3-opus-20240229":       "claude-3-opus",
     "claude-3-sonnet-20240229":     "claude-3-sonnet",
-    "claude-3-haiku-20240307":      "claude-3-haiku"
+    "claude-3-haiku-20240307":      "claude-3-haiku",
+    "gemini-3.1-pro-preview-customtools": "gemini-3.1-pro-preview",
+    "deepseek-chat":                "deepseek-v4-flash",
+    "deepseek-reasoner":            "deepseek-v4-flash"
   }
 }
