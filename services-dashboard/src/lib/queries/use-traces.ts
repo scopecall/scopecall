@@ -16,6 +16,7 @@ interface TracesParams {
   provider?: string;
   userId?: string;
   environment?: string;
+  project?: string;
   q?: string;
   /** Filter to one prompt version. Pass "__null__" for untagged calls. */
   promptVersion?: string;
@@ -48,6 +49,7 @@ export function useTraces(params: TracesParams, enabled = true) {
       params.provider,
       params.userId,
       params.environment,
+      params.project,
       params.q,
       params.promptVersion,
       params.customerId,
@@ -74,6 +76,7 @@ export function useTraces(params: TracesParams, enabled = true) {
             provider: params.provider,
             user_id: params.userId,
             environment: params.environment,
+            project: params.project,
             q: params.q,
             prompt_version: params.promptVersion,
             customer_id: params.customerId,

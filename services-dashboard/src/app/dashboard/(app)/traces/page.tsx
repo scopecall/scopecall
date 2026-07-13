@@ -360,7 +360,7 @@ function TracesView() {
   const router = useRouter();
   const sp = useSearchParams();
   const orgId = useOrgId();
-  const { from, to, env, label } = useTimeRange();
+  const { from, to, env, project, label } = useTimeRange();
 
   const enabled = !!orgId;
   const oid = orgId ?? "";
@@ -469,6 +469,7 @@ function TracesView() {
       userId: user,
       customerId: customer,
       environment: effectiveEnv,
+      project,
       workflow,
       agent,
       step,

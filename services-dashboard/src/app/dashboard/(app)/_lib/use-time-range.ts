@@ -38,7 +38,7 @@ const RANGE_MS: Record<RangeKey, number> = {
 export const DEFAULT_RANGE: RangeKey = "7d";
 
 /** Param keys that represent global scope — carried across v2 nav + drills. */
-export const GLOBAL_SCOPE_KEYS = ["range", "from", "to", "gran", "env"] as const;
+export const GLOBAL_SCOPE_KEYS = ["range", "from", "to", "gran", "env", "project"] as const;
 
 /**
  * Serialize just the global-scope params from `sp` into a query string
@@ -77,6 +77,8 @@ export interface ResolvedTimeRange {
   granularity: "hour" | "day";
   /** environment scope, e.g. "production"; undefined = all environments. */
   env: string | undefined;
+  /** project scope (application/service label); undefined = all projects. */
+  project: string | undefined;
   /** human label for the active window — drives the pill + page headers. */
   label: string;
 }
@@ -88,6 +90,7 @@ export function useTimeRange(): ResolvedTimeRange {
   const toParam = sp.get("to");
   const granParam = sp.get("gran");
   const env = sp.get("env") ?? undefined;
+  const project = sp.get("project") ?? undefined;
 
   return useMemo<ResolvedTimeRange>(() => {
     let from: Date;
@@ -116,8 +119,8 @@ export function useTimeRange(): ResolvedTimeRange {
       ? RANGE_LABELS[rangeKey]
       : `${from.toLocaleDateString()} – ${to.toLocaleDateString()}`;
 
-    return { from, to, rangeKey, granularity, env, label };
-  }, [rangeParam, fromParam, toParam, granParam, env]);
+    return { from, to, rangeKey, granularity, env, project, label };
+  }, [rangeParam, fromParam, toParam, granParam, env, project]);
 }
 
 /**
@@ -162,5 +165,15 @@ export function useTimeRangeControls() {
     [router, pathname, sp],
   );
 
-  return { setRange, setGranularity, setEnv };
+  const setProject = useCallback(
+    (project: string | null) => {
+      const next = new URLSearchParams(sp.toString());
+      if (project) next.set("project", project);
+      else next.delete("project");
+      router.replace(`${pathname}?${next.toString()}`, { scroll: false });
+    },
+    [router, pathname, sp],
+  );
+
+  return { setRange, setGranularity, setEnv, setProject };
 }

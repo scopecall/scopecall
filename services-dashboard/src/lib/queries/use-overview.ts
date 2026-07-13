@@ -8,11 +8,13 @@ interface OverviewParams {
   orgId: string;
   from: Date;
   to: Date;
+  environment?: string;
+  project?: string;
 }
 
 export function useOverview(params: OverviewParams, enabled = true) {
   return useQuery({
-    queryKey: ["overview", params.orgId, params.from.toISOString(), params.to.toISOString()],
+    queryKey: ["overview", params.orgId, params.from.toISOString(), params.to.toISOString(), params.environment, params.project],
     queryFn: async () => {
       const token = await auth.getAccessToken();
       if (!token) throw new Error("No session");
@@ -24,6 +26,8 @@ export function useOverview(params: OverviewParams, enabled = true) {
             org_id: params.orgId,
             from: params.from.toISOString(),
             to: params.to.toISOString(),
+            environment: params.environment,
+            project: params.project,
           },
         },
       });

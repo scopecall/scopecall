@@ -51,6 +51,8 @@ interface Params {
   from: Date;
   to: Date;
   limit?: number;
+  environment?: string;
+  project?: string;
 }
 
 export function useWorkflowCostTree(params: Params, enabled = true) {
@@ -61,6 +63,8 @@ export function useWorkflowCostTree(params: Params, enabled = true) {
       params.from.toISOString(),
       params.to.toISOString(),
       params.limit,
+      params.environment,
+      params.project,
     ],
     queryFn: async (): Promise<WorkflowCostTreeResponse> => {
       const headers = await authHeaders();
@@ -70,6 +74,8 @@ export function useWorkflowCostTree(params: Params, enabled = true) {
         to: params.to.toISOString(),
       });
       if (params.limit) qs.set("limit", String(params.limit));
+      if (params.environment) qs.set("environment", params.environment);
+      if (params.project) qs.set("project", params.project);
       const res = await fetch(`${apiBase()}/api/v1/workflow-cost-tree?${qs}`, { headers });
       if (res.status === 401) throw Object.assign(new Error("Unauthorized"), { status: 401 });
       if (!res.ok) throw new Error(`workflow-cost-tree: ${res.status} ${await res.text()}`);

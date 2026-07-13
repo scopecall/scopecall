@@ -29,6 +29,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useFocusTrap } from "./_lib/use-focus-trap";
+import { useOrgId } from "@/lib/org-context";
+import { useProjects } from "@/lib/queries/use-projects";
 import {
   RANGE_KEYS,
   RANGE_LABELS,
@@ -271,6 +273,7 @@ function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
 
       {/* Scope + time — global, replaces every per-page picker (URL-backed). */}
       <ScopePill />
+      <ProjectPill />
       <TimePill />
 
       {/* Push the account control to the far right of the bar. */}
@@ -384,6 +387,47 @@ function ScopePill() {
               {o.label}
             </span>
             {o.value === (env ?? null) && <Check className="h-3.5 w-3.5" />}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function ProjectPill() {
+  const orgId = useOrgId();
+  const { project } = useTimeRange();
+  const { setProject } = useTimeRangeControls();
+  // Options come from the data (SCOPECALL_PROJECT labels), not a hardcoded
+  // list — unlike environments, projects are user-defined names.
+  const { data: projects } = useProjects(orgId ?? "", !!orgId);
+
+  // Hide the pill entirely until at least one project label exists — an org
+  // that never sets SCOPECALL_PROJECT shouldn't see a filter with no options.
+  if (!projects || projects.length === 0) return null;
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger className="inline-flex items-center gap-1.5 text-xs text-foreground border border-border rounded-md px-2.5 py-1 hover:bg-surface-hover transition-colors focus-ring">
+        <span className={cn("size-1.5 rounded-full", project ? "bg-violet-400" : "bg-muted-foreground")} />
+        {project ?? "All projects"}
+        <ChevronDown className="h-3 w-3 opacity-60" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="min-w-44">
+        <DropdownMenuItem onClick={() => setProject(null)} className="justify-between">
+          <span className="flex items-center gap-2">
+            <span className="size-1.5 rounded-full bg-muted-foreground" />
+            All projects
+          </span>
+          {!project && <Check className="h-3.5 w-3.5" />}
+        </DropdownMenuItem>
+        {projects.map((p) => (
+          <DropdownMenuItem key={p} onClick={() => setProject(p)} className="justify-between">
+            <span className="flex items-center gap-2">
+              <span className="size-1.5 rounded-full bg-violet-400" />
+              {p}
+            </span>
+            {p === project && <Check className="h-3.5 w-3.5" />}
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>

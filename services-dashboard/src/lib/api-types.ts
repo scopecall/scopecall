@@ -274,6 +274,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Distinct project labels for the org
+         * @description v0.4 — feeds the dashboard's project picker. Projects are application/service labels set via SDK config (SCOPECALL_PROJECT), orthogonal to environment (the server tier). Not windowed: quiet projects stay selectable. The '' (unassigned) bucket is excluded. Capped at 100 values.
+         */
+        get: operations["ListProjects"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sessions": {
         parameters: {
             query?: never;
@@ -669,8 +689,6 @@ export interface components {
             recommendation: string;
             /** Format: double */
             potential_savings_usd: number;
-            /** @description Count of calls this finding deems wasted (retried or errored). Lets the UI show an impact line even when there are no recoverable dollars — e.g. an error storm on a free/deprecated model that 404s before burning tokens. Absent (0) for model_misuse. */
-            wasted_calls?: number;
             workflow?: string;
             model?: string;
             step?: string;
@@ -806,6 +824,10 @@ export interface components {
         };
     };
     parameters: {
+        /** @description v0.4 — scope to one environment (server tier). */
+        EnvironmentScope: string;
+        /** @description v0.4 — scope to one project (application/service label, orthogonal to environment). */
+        ProjectScope: string;
         /** @description Organization ID. Must match the org_id in the authenticated token. */
         OrgId: string;
         /** @description Absolute ISO8601 timestamp (e.g. 2026-05-01T00:00:00Z). Relative values (now-24h) are rejected with 400. */
@@ -831,6 +853,10 @@ export interface operations {
                 from: components["parameters"]["From"];
                 /** @description Absolute ISO8601 timestamp (e.g. 2026-05-22T00:00:00Z). Must be after 'from'. */
                 to: components["parameters"]["To"];
+                /** @description v0.4 — scope to one environment (server tier). */
+                environment?: components["parameters"]["EnvironmentScope"];
+                /** @description v0.4 — scope to one project (application/service label, orthogonal to environment). */
+                project?: components["parameters"]["ProjectScope"];
             };
             header?: never;
             path?: never;
@@ -870,6 +896,8 @@ export interface operations {
                 provider?: string;
                 user_id?: string;
                 environment?: string;
+                /** @description v0.4 — scope to one project (application/service label, orthogonal to environment). */
+                project?: string;
                 /** @description Filter to one prompt version (set via sdk.trace(..., {promptVersion}) or ScopeCallConfig.defaultPromptVersion). Pass __null__ to show untagged calls only — matches the Prompts page's "(untagged)" row. */
                 prompt_version?: string;
                 /** @description v0.3 — B2B tenant filter. Drilled into from /dashboard/customers and the workflow-detail by-customer panel. Pass __null__ to show calls with no customer_id (the "Unattributed" tile on the Customers page). */
@@ -940,6 +968,10 @@ export interface operations {
                 /** @description Absolute ISO8601 timestamp (e.g. 2026-05-22T00:00:00Z). Must be after 'from'. */
                 to: components["parameters"]["To"];
                 granularity?: components["parameters"]["Granularity"];
+                /** @description v0.4 — scope to one environment (server tier). */
+                environment?: components["parameters"]["EnvironmentScope"];
+                /** @description v0.4 — scope to one project (application/service label, orthogonal to environment). */
+                project?: components["parameters"]["ProjectScope"];
             };
             header?: never;
             path?: never;
@@ -970,6 +1002,10 @@ export interface operations {
                 /** @description Absolute ISO8601 timestamp (e.g. 2026-05-22T00:00:00Z). Must be after 'from'. */
                 to: components["parameters"]["To"];
                 granularity?: components["parameters"]["Granularity"];
+                /** @description v0.4 — scope to one environment (server tier). */
+                environment?: components["parameters"]["EnvironmentScope"];
+                /** @description v0.4 — scope to one project (application/service label, orthogonal to environment). */
+                project?: components["parameters"]["ProjectScope"];
             };
             header?: never;
             path?: never;
@@ -1000,6 +1036,10 @@ export interface operations {
                 /** @description Absolute ISO8601 timestamp (e.g. 2026-05-22T00:00:00Z). Must be after 'from'. */
                 to: components["parameters"]["To"];
                 granularity?: components["parameters"]["Granularity"];
+                /** @description v0.4 — scope to one environment (server tier). */
+                environment?: components["parameters"]["EnvironmentScope"];
+                /** @description v0.4 — scope to one project (application/service label, orthogonal to environment). */
+                project?: components["parameters"]["ProjectScope"];
             };
             header?: never;
             path?: never;
@@ -1099,6 +1139,10 @@ export interface operations {
                 /** @description Dimension to aggregate cost and calls by. model/provider/feature read the pre-aggregated hourly rollup; user/customer/environment scan raw calls over the window. customer groups by the B2B tenant (customer_id) — distinct from user (the end-user). */
                 group_by?: components["parameters"]["GroupBy"];
                 limit?: number;
+                /** @description v0.4 — scope to one environment (server tier). */
+                environment?: components["parameters"]["EnvironmentScope"];
+                /** @description v0.4 — scope to one project (application/service label, orthogonal to environment). */
+                project?: components["parameters"]["ProjectScope"];
             };
             header?: never;
             path?: never;
@@ -1305,6 +1349,32 @@ export interface operations {
             403: components["responses"]["Problem403"];
         };
     };
+    ListProjects: {
+        parameters: {
+            query: {
+                org_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Distinct non-empty project labels, alphabetical. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        projects: string[];
+                    };
+                };
+            };
+            401: components["responses"]["Problem401"];
+            403: components["responses"]["Problem403"];
+        };
+    };
     ListSessions: {
         parameters: {
             query: {
@@ -1326,6 +1396,8 @@ export interface operations {
                 provider?: string;
                 /** @description Match sessions with at least one call in this environment. */
                 environment?: string;
+                /** @description v0.4 — match sessions with at least one call in this project. */
+                project?: string;
                 limit?: number;
             };
             header?: never;
@@ -1361,6 +1433,8 @@ export interface operations {
                 feature_name?: string;
                 /** @description Scope to one environment. */
                 environment?: string;
+                /** @description v0.4 — scope to one project. */
+                project?: string;
                 limit?: number;
             };
             header?: never;

@@ -50,7 +50,7 @@ function fmtAgo(sec: number): string {
 
 export default function V2HealthPage() {
   const orgId = useOrgId();
-  const { from, to, granularity, label } = useTimeRange();
+  const { from, to, granularity, label, env, project } = useTimeRange();
   const router = useRouter();
   const sp = useSearchParams();
 
@@ -62,9 +62,10 @@ export default function V2HealthPage() {
   const priorFrom = new Date(from.getTime() - span);
   const priorTo = from;
 
-  const cur = useOverview({ orgId: oid, from, to }, enabled);
-  const prev = useOverview({ orgId: oid, from: priorFrom, to: priorTo }, enabled);
-  const latSeries = useLatencyMetrics({ orgId: oid, from, to, granularity }, enabled);
+  const scope = { environment: env, project };
+  const cur = useOverview({ orgId: oid, from, to, ...scope }, enabled);
+  const prev = useOverview({ orgId: oid, from: priorFrom, to: priorTo, ...scope }, enabled);
+  const latSeries = useLatencyMetrics({ orgId: oid, from, to, granularity, ...scope }, enabled);
   const errStatusQ = useErrorsByStatus({ orgId: oid, from, to, granularity }, enabled);
   const regsQ = useRegressions({ orgId: oid, from, to, limit: 12 }, enabled);
   const sdkQ = useSDKHealth(oid, enabled);

@@ -44,11 +44,13 @@ interface Params {
   orgId: string;
   from: Date;
   to: Date;
+  environment?: string;
+  project?: string;
 }
 
 export function useWasteInbox(params: Params, enabled = true) {
   return useQuery({
-    queryKey: ["waste-inbox", params.orgId, params.from.toISOString(), params.to.toISOString()],
+    queryKey: ["waste-inbox", params.orgId, params.from.toISOString(), params.to.toISOString(), params.environment, params.project],
     queryFn: async (): Promise<WasteInboxResponse> => {
       const headers = await authHeaders();
       const qs = new URLSearchParams({
@@ -56,6 +58,8 @@ export function useWasteInbox(params: Params, enabled = true) {
         from: params.from.toISOString(),
         to: params.to.toISOString(),
       });
+      if (params.environment) qs.set("environment", params.environment);
+      if (params.project) qs.set("project", params.project);
       const res = await fetch(`${apiBase()}/api/v1/waste-inbox?${qs}`, { headers });
       if (res.status === 401) throw Object.assign(new Error("Unauthorized"), { status: 401 });
       if (!res.ok) throw new Error(`waste-inbox: ${res.status} ${await res.text()}`);

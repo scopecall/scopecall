@@ -11,11 +11,13 @@ interface TopMoversParams {
   to: Date;
   groupBy: BreakdownDimension;
   limit?: number;
+  environment?: string;
+  project?: string;
 }
 
 export function useTopMovers(params: TopMoversParams, enabled = true) {
   return useQuery({
-    queryKey: ["top-movers", params.orgId, params.from.toISOString(), params.to.toISOString(), params.groupBy, params.limit],
+    queryKey: ["top-movers", params.orgId, params.from.toISOString(), params.to.toISOString(), params.groupBy, params.limit, params.environment, params.project],
     queryFn: async () => {
       const token = await auth.getAccessToken();
       if (!token) throw new Error("No session");
@@ -28,6 +30,8 @@ export function useTopMovers(params: TopMoversParams, enabled = true) {
             to: params.to.toISOString(),
             group_by: params.groupBy,
             limit: params.limit,
+            environment: params.environment,
+            project: params.project,
           },
         },
       });

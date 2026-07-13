@@ -50,6 +50,8 @@ interface Params {
   from: Date;
   to: Date;
   unknownLimit?: number;
+  environment?: string;
+  project?: string;
 }
 
 export function useCostConfidence(params: Params, enabled = true) {
@@ -60,6 +62,8 @@ export function useCostConfidence(params: Params, enabled = true) {
       params.from.toISOString(),
       params.to.toISOString(),
       params.unknownLimit,
+      params.environment,
+      params.project,
     ],
     queryFn: async (): Promise<CostConfidenceResponse> => {
       const headers = await authHeaders();
@@ -69,6 +73,8 @@ export function useCostConfidence(params: Params, enabled = true) {
         to: params.to.toISOString(),
       });
       if (params.unknownLimit) qs.set("unknown_limit", String(params.unknownLimit));
+      if (params.environment) qs.set("environment", params.environment);
+      if (params.project) qs.set("project", params.project);
       const res = await fetch(`${apiBase()}/api/v1/cost-confidence?${qs}`, { headers });
       if (res.status === 401) throw Object.assign(new Error("Unauthorized"), { status: 401 });
       if (!res.ok) throw new Error(`cost-confidence: ${res.status} ${await res.text()}`);

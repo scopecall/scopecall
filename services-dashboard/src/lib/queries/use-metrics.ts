@@ -9,6 +9,8 @@ interface MetricsParams {
   from: Date;
   to: Date;
   granularity?: "hour" | "day";
+  environment?: string;
+  project?: string;
 }
 
 function makeMetricsQuery(
@@ -17,7 +19,7 @@ function makeMetricsQuery(
 ) {
   return function useMetrics(params: MetricsParams, enabled = true) {
     return useQuery({
-      queryKey: [key, params.orgId, params.from.toISOString(), params.to.toISOString(), params.granularity],
+      queryKey: [key, params.orgId, params.from.toISOString(), params.to.toISOString(), params.granularity, params.environment, params.project],
       queryFn: async () => {
         const token = await auth.getAccessToken();
         if (!token) throw new Error("No session");
@@ -30,6 +32,8 @@ function makeMetricsQuery(
               from: params.from.toISOString(),
               to: params.to.toISOString(),
               granularity: params.granularity ?? "hour",
+              environment: params.environment,
+              project: params.project,
             },
           },
         });

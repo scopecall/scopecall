@@ -61,7 +61,7 @@ const COST_NOISE_FLOOR = 0.01; // matches insights-strip + handler/top_movers.go
 
 export default function V2OverviewPage() {
   const orgId = useOrgId();
-  const { from, to, granularity, label } = useTimeRange();
+  const { from, to, granularity, label, env, project } = useTimeRange();
   const router = useRouter();
   const sp = useSearchParams();
   const [treemapDim, setTreemapDim] = useState<TreemapDim>("workflow");
@@ -81,22 +81,25 @@ export default function V2OverviewPage() {
   const priorFrom = new Date(from.getTime() - span);
   const priorTo = from;
 
-  const cur = useOverview({ orgId: oid, from, to }, enabled);
-  const prev = useOverview({ orgId: oid, from: priorFrom, to: priorTo }, enabled);
-  const conf = useCostConfidence({ orgId: oid, from, to }, enabled);
-  const wasteQ = useWasteInbox({ orgId: oid, from, to }, enabled);
-  const moversFeature = useTopMovers({ orgId: oid, from, to, groupBy: "feature", limit: 8 }, enabled);
+  // Global env/project scope (header pills) applies to every Overview query.
+  const scope = { environment: env, project };
+
+  const cur = useOverview({ orgId: oid, from, to, ...scope }, enabled);
+  const prev = useOverview({ orgId: oid, from: priorFrom, to: priorTo, ...scope }, enabled);
+  const conf = useCostConfidence({ orgId: oid, from, to, ...scope }, enabled);
+  const wasteQ = useWasteInbox({ orgId: oid, from, to, ...scope }, enabled);
+  const moversFeature = useTopMovers({ orgId: oid, from, to, groupBy: "feature", limit: 8, ...scope }, enabled);
   const moversTreemap = useTopMovers(
-    { orgId: oid, from, to, groupBy: moversDim, limit: 14 },
+    { orgId: oid, from, to, groupBy: moversDim, limit: 14, ...scope },
     enabled && !isWorkflowTab,
   );
   const workflowTree = useWorkflowCostTree(
-    { orgId: oid, from, to, limit: 14 },
+    { orgId: oid, from, to, limit: 14, ...scope },
     enabled && isWorkflowTab,
   );
-  const costSeries = useCostMetrics({ orgId: oid, from, to, granularity }, enabled);
-  const latSeries = useLatencyMetrics({ orgId: oid, from, to, granularity }, enabled);
-  const errSeries = useErrorMetrics({ orgId: oid, from, to, granularity }, enabled);
+  const costSeries = useCostMetrics({ orgId: oid, from, to, granularity, ...scope }, enabled);
+  const latSeries = useLatencyMetrics({ orgId: oid, from, to, granularity, ...scope }, enabled);
+  const errSeries = useErrorMetrics({ orgId: oid, from, to, granularity, ...scope }, enabled);
 
   // ── Page-level gates (only the headline query blocks the whole page) ──────
   if (!orgId || cur.isLoading) return <OverviewSkeleton />;

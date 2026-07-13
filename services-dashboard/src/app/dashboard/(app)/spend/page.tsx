@@ -67,7 +67,7 @@ export default function V2SpendPage() {
   const router = useRouter();
   const pathname = usePathname();
   const sp = useSearchParams();
-  const { from, to, label, env } = useTimeRange();
+  const { from, to, label, env, project } = useTimeRange();
 
   // The active lens is URL-backed (?view=) so it's deep-linkable and shareable:
   // the retired /dashboard/customers and /dashboard/prompts URLs redirect
@@ -97,9 +97,10 @@ export default function V2SpendPage() {
   const priorFrom = new Date(from.getTime() - span);
   const priorTo = from;
 
-  const cur = useOverview({ orgId: oid, from, to }, enabled);
-  const prev = useOverview({ orgId: oid, from: priorFrom, to: priorTo }, enabled);
-  const conf = useCostConfidence({ orgId: oid, from, to, unknownLimit: 8 }, enabled);
+  const dataScope = { environment: env, project };
+  const cur = useOverview({ orgId: oid, from, to, ...dataScope }, enabled);
+  const prev = useOverview({ orgId: oid, from: priorFrom, to: priorTo, ...dataScope }, enabled);
+  const conf = useCostConfidence({ orgId: oid, from, to, unknownLimit: 8, ...dataScope }, enabled);
   const breakdown = useBreakdown(
     { orgId: oid, from, to, groupBy: dimension, secondaryGroupBy: secondary, limit: 100 },
     enabled && view === "breakdown",
