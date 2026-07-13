@@ -109,6 +109,9 @@ class LLMEvent:
 
     # ── Meta ─────────────────────────────────────────────────────────────
     environment: str = "production"
+    # Application/service label, orthogonal to environment (the server
+    # tier). "" = unassigned; the dashboard renders it as "(unassigned)".
+    project: str = ""
     sdk_version: str = "0.0.0"
 
     # ── Misc / extensibility ─────────────────────────────────────────────
@@ -222,6 +225,7 @@ class LLMEvent:
             "session_id": self.session_id,
             "customer_id": self.customer_id,
             "environment": self.environment,
+            "project": self.project,
             "sdk_version": self.sdk_version,
             "extra": self.extra,
             "finish_reason": self.finish_reason,

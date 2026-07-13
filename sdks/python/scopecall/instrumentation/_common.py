@@ -159,6 +159,7 @@ def build_llm_event(
         session_id=session_id,
         customer_id=customer_id,
         environment=config.environment,
+        project=config.project,
         sdk_version=__version__,
         extra=extra,
         finish_reason=finish_reason,

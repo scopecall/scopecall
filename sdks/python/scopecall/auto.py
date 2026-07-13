@@ -20,7 +20,7 @@ Everything is a no-op when ``SCOPECALL_API_KEY`` is unset. The explicit API
 composes — auto is the convenience layer, not a replacement.
 
 Env vars: SCOPECALL_API_KEY (required to enable), SCOPECALL_ENDPOINT,
-SCOPECALL_ENV, SCOPECALL_TEST, SCOPECALL_DEBUG (console transport),
+SCOPECALL_ENV, SCOPECALL_PROJECT, SCOPECALL_TEST, SCOPECALL_DEBUG (console transport),
 SCOPECALL_OUTPUT (NDJSON file).
 
 Full auto-on-import needs ``wrapt`` (``pip install scopecall-py[auto]``).
@@ -70,6 +70,8 @@ def _ensure_sdk():
             kwargs["output"] = output
         if os.getenv("SCOPECALL_ENV"):
             kwargs["environment"] = os.getenv("SCOPECALL_ENV")
+        if os.getenv("SCOPECALL_PROJECT"):
+            kwargs["project"] = os.getenv("SCOPECALL_PROJECT")
         if _truthy(os.getenv("SCOPECALL_TEST")):
             kwargs["test"] = True
         return _sdk.init(**kwargs)

@@ -113,3 +113,36 @@ class TestConfigMode:
         # anywhere even if other flags happen to be set.
         cfg = ScopeCallConfig(disabled=True, debug=True, output="/tmp/x.jsonl")
         assert cfg.mode == "noop"
+
+
+class TestProjectField:
+    """`project` is the application label, orthogonal to environment."""
+
+    def test_project_defaults_to_unassigned(self):
+        sdk = scopecall.init(debug=True)
+        assert sdk.config.project == ""
+        sdk.close(timeout=1.0)
+
+    def test_project_via_kwargs(self):
+        sdk = scopecall.init(debug=True, project="sp-optimizer")
+        assert sdk.config.project == "sp-optimizer"
+        sdk.close(timeout=1.0)
+
+    @staticmethod
+    def _minimal_event(**overrides):
+        from scopecall.wire import LLMEvent
+
+        kwargs = dict(
+            trace_id="t1", span_id="s1", parent_span_id=None, timestamp=1.0,
+            latency_ms=10, ttft_ms=None, model="gpt-4o", provider="openai",
+            input_tokens=1, output_tokens=2, cost_usd=0.01,
+        )
+        kwargs.update(overrides)
+        return LLMEvent(**kwargs)
+
+    def test_project_reaches_the_wire(self):
+        ev = self._minimal_event(project="trending-dashboard")
+        assert ev.to_wire()["project"] == "trending-dashboard"
+
+    def test_wire_default_is_empty(self):
+        assert self._minimal_event().to_wire()["project"] == ""

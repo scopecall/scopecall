@@ -55,6 +55,11 @@ class ScopeCallConfig:
 
     # ── Behavior ─────────────────────────────────────────────────────────
     environment: str = "production"
+    # Which application/service this process belongs to (e.g. "sp-optimizer",
+    # "trending-dashboard"). Orthogonal to `environment` (the server tier):
+    # one project runs in many environments and vice versa. Empty string =
+    # unassigned; the dashboard renders it as "(unassigned)".
+    project: str = ""
     redact_pii: bool = True
     capture_content: bool = True
 
