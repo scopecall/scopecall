@@ -132,14 +132,14 @@ FROM agg
 ORDER BY curr_cost DESC
 LIMIT {lim:UInt32}`
 
-	args := scope.params([]driver.NamedValue{
-		{Name: "org_id", Value: orgID},
-		{Name: "from", Value: chDateTime(tw.From)},
-		{Name: "to", Value: chDateTime(tw.To)},
-		{Name: "prior_from", Value: chDateTime(priorFrom)},
+	args := scope.params([]any{
+		driver.NamedValue{Name: "org_id", Value: orgID},
+		driver.NamedValue{Name: "from", Value: chDateTime(tw.From)},
+		driver.NamedValue{Name: "to", Value: chDateTime(tw.To)},
+		driver.NamedValue{Name: "prior_from", Value: chDateTime(priorFrom)},
 		// CH named params are wire-transmitted as strings and cast server-side
 		// per the {lim:UInt32} annotation — see types.go for the rationale.
-		{Name: "lim", Value: strconv.Itoa(limit)},
+		driver.NamedValue{Name: "lim", Value: strconv.Itoa(limit)},
 	})
 	rows, err := ch.Query(ctx, q, args...)
 	if err != nil {

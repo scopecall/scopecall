@@ -69,10 +69,10 @@ WHERE org_id    = {org_id:String}
   AND timestamp <  {to:DateTime('UTC')}` + scope.cond("") + `
 GROUP BY src
 ORDER BY cost DESC`
-	args := scope.params([]driver.NamedValue{
-		{Name: "org_id", Value: orgID},
-		{Name: "from", Value: chDateTime(tw.From)},
-		{Name: "to", Value: chDateTime(tw.To)},
+	args := scope.params([]any{
+		driver.NamedValue{Name: "org_id", Value: orgID},
+		driver.NamedValue{Name: "from", Value: chDateTime(tw.From)},
+		driver.NamedValue{Name: "to", Value: chDateTime(tw.To)},
 	})
 	rows, err := ch.Query(ctx, srcQ, args...)
 	if err != nil {
@@ -119,12 +119,12 @@ WHERE org_id      = {org_id:String}
 GROUP BY model, provider
 ORDER BY calls DESC
 LIMIT {lim:UInt32}`
-	unkArgs := scope.params([]driver.NamedValue{
-		{Name: "org_id", Value: orgID},
-		{Name: "from", Value: chDateTime(tw.From)},
-		{Name: "to", Value: chDateTime(tw.To)},
+	unkArgs := scope.params([]any{
+		driver.NamedValue{Name: "org_id", Value: orgID},
+		driver.NamedValue{Name: "from", Value: chDateTime(tw.From)},
+		driver.NamedValue{Name: "to", Value: chDateTime(tw.To)},
 		// CH named params transmit as strings (see types.go).
-		{Name: "lim", Value: strconv.Itoa(unknownLimit)},
+		driver.NamedValue{Name: "lim", Value: strconv.Itoa(unknownLimit)},
 	})
 	unkRows, err := ch.Query(ctx, unkQ, unkArgs...)
 	if err != nil {

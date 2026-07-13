@@ -56,8 +56,10 @@ func (s Scope) cond(prefix string) string {
 	return b.String()
 }
 
-// params appends the scope's bound values to args.
-func (s Scope) params(args []driver.NamedValue) []driver.NamedValue {
+// params appends the scope's bound values to args. The slice is []any
+// because the CH driver's Query/QueryRow are variadic over any — a typed
+// []driver.NamedValue cannot be spread into them.
+func (s Scope) params(args []any) []any {
 	if s.Environment != "" {
 		args = append(args, driver.NamedValue{Name: "scope_env", Value: s.Environment})
 	}

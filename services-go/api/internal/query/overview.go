@@ -44,10 +44,10 @@ WHERE org_id = {org_id:String}
   AND timestamp >= {from:DateTime('UTC')}
   AND timestamp <  {to:DateTime('UTC')}
 ` + scope.cond("")
-	args := scope.params([]driver.NamedValue{
-		{Name: "org_id", Value: orgID},
-		{Name: "from", Value: chDateTime(tw.From)},
-		{Name: "to", Value: chDateTime(tw.To)},
+	args := scope.params([]any{
+		driver.NamedValue{Name: "org_id", Value: orgID},
+		driver.NamedValue{Name: "from", Value: chDateTime(tw.From)},
+		driver.NamedValue{Name: "to", Value: chDateTime(tw.To)},
 	})
 	row := ch.QueryRow(ctx, q, args...)
 

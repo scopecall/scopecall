@@ -57,10 +57,10 @@ func WasteInbox(ctx context.Context, ch driver.Conn, orgID string, tw TimeWindow
 	// rule. Falls back to 0 (no severity-tier amplification) on error.
 	var grand float64
 	{
-		grandArgs := scope.params([]driver.NamedValue{
-			{Name: "org_id", Value: orgID},
-			{Name: "from", Value: chDateTime(tw.From)},
-			{Name: "to", Value: chDateTime(tw.To)},
+		grandArgs := scope.params([]any{
+			driver.NamedValue{Name: "org_id", Value: orgID},
+			driver.NamedValue{Name: "from", Value: chDateTime(tw.From)},
+			driver.NamedValue{Name: "to", Value: chDateTime(tw.To)},
 		})
 		row := ch.QueryRow(ctx, `
 SELECT sum(cost_usd)
@@ -107,10 +107,10 @@ HAVING retry_cost > 0.001 AND total_cost > 0
    AND retry_cost / total_cost > 0.10
 ORDER BY retry_cost DESC
 LIMIT 5`
-		ruleArgs := scope.params([]driver.NamedValue{
-			{Name: "org_id", Value: orgID},
-			{Name: "from", Value: chDateTime(tw.From)},
-			{Name: "to", Value: chDateTime(tw.To)},
+		ruleArgs := scope.params([]any{
+			driver.NamedValue{Name: "org_id", Value: orgID},
+			driver.NamedValue{Name: "from", Value: chDateTime(tw.From)},
+			driver.NamedValue{Name: "to", Value: chDateTime(tw.To)},
 		})
 		rows, err := ch.Query(ctx, q, ruleArgs...)
 		if err != nil {
@@ -204,10 +204,10 @@ WHERE psm.avg_cost > sc.cheap_avg * 3
   AND (psm.avg_cost - sc.cheap_avg) * psm.calls > 0.005
 ORDER BY potential_savings DESC
 LIMIT 5`
-		ruleArgs := scope.params([]driver.NamedValue{
-			{Name: "org_id", Value: orgID},
-			{Name: "from", Value: chDateTime(tw.From)},
-			{Name: "to", Value: chDateTime(tw.To)},
+		ruleArgs := scope.params([]any{
+			driver.NamedValue{Name: "org_id", Value: orgID},
+			driver.NamedValue{Name: "from", Value: chDateTime(tw.From)},
+			driver.NamedValue{Name: "to", Value: chDateTime(tw.To)},
 		})
 		rows, err := ch.Query(ctx, q, ruleArgs...)
 		if err != nil {
@@ -280,10 +280,10 @@ HAVING total_calls >= 10
    AND error_calls / total_calls > 0.05
 ORDER BY error_calls DESC
 LIMIT 5`
-		ruleArgs := scope.params([]driver.NamedValue{
-			{Name: "org_id", Value: orgID},
-			{Name: "from", Value: chDateTime(tw.From)},
-			{Name: "to", Value: chDateTime(tw.To)},
+		ruleArgs := scope.params([]any{
+			driver.NamedValue{Name: "org_id", Value: orgID},
+			driver.NamedValue{Name: "from", Value: chDateTime(tw.From)},
+			driver.NamedValue{Name: "to", Value: chDateTime(tw.To)},
 		})
 		rows, err := ch.Query(ctx, q, ruleArgs...)
 		if err != nil {
