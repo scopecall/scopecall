@@ -62,6 +62,7 @@ fn make_test_event(trace_id: &str) -> EnrichedEvent {
             cost_source: None,
             pricing_version: None,
             environment: "test".to_owned(),
+            project: String::new(),
             sdk_version: "0.1.0".to_owned(),
             extra: None,
             finish_reason: None,

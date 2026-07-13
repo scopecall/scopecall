@@ -123,6 +123,11 @@ pub struct LlmEvent {
 
     // Metadata
     pub environment: String,
+    /// Application/service label (e.g. "sp-optimizer"), orthogonal to
+    /// environment (the server tier). `#[serde(default)]` so pre-v0.4 SDKs
+    /// (which don't send the field) deserialize to "" = unassigned.
+    #[serde(default)]
+    pub project: String,
     pub sdk_version: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub extra: Option<String>,
@@ -274,6 +279,7 @@ impl LlmEvent {
         check_len("model", &self.model, MAX_LABEL_LEN)?;
         check_len("provider", &self.provider, MAX_LABEL_LEN)?;
         check_len("environment", &self.environment, MAX_LABEL_LEN)?;
+        check_len("project", &self.project, MAX_LABEL_LEN)?;
         check_len("sdk_version", &self.sdk_version, MAX_LABEL_LEN)?;
         check_opt("feature_name", &self.feature_name, MAX_LABEL_LEN)?;
         check_opt("original_model", &self.original_model, MAX_LABEL_LEN)?;

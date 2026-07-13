@@ -21,6 +21,7 @@
 //!   * OTLP status.code == 2 (ERROR)            → status="error"
 //!   * (endTime − startTime)                    → latency_ms
 //!   * resource `deployment.environment`        → environment (default "production")
+//!   * resource `service.name`                  → project (default "" = unassigned)
 //!
 //! cost_usd is left 0 — the processor reprices from the bundled table, so
 //! the cost-source trust signal works for OTel traffic exactly as for SDK
@@ -81,6 +82,14 @@ pub async fn handler(
                     .and_then(|r| attr_str(&r.attributes, "deployment.environment.name"))
             })
             .unwrap_or_else(|| "production".to_owned());
+        // OTLP's canonical application label is resource `service.name` —
+        // map it to `project` (ScopeCall's app dimension). Default "" =
+        // unassigned, mirroring the JSON-ingest path.
+        let project = rs
+            .resource
+            .as_ref()
+            .and_then(|r| attr_str(&r.attributes, "service.name"))
+            .unwrap_or_default();
 
         for ss in &rs.scope_spans {
             for span in &ss.spans {
@@ -92,7 +101,7 @@ pub async fn handler(
                     );
                     break;
                 }
-                if let Some(ev) = map_span(span, &environment) {
+                if let Some(ev) = map_span(span, &environment, &project) {
                     events.push(ev);
                 }
             }
@@ -140,7 +149,7 @@ pub async fn handler(
 
 // ── span → LlmEvent mapping ────────────────────────────────────────────────
 
-fn map_span(span: &OtlpSpan, environment: &str) -> Option<LlmEvent> {
+fn map_span(span: &OtlpSpan, environment: &str, project: &str) -> Option<LlmEvent> {
     // Skip spans with no id — they can't participate in the trace tree.
     if span.trace_id.is_empty() || span.span_id.is_empty() {
         return None;
@@ -237,6 +246,7 @@ fn map_span(span: &OtlpSpan, environment: &str) -> Option<LlmEvent> {
         cost_source: None,
         pricing_version: None,
         environment: truncate(environment, common::event::MAX_LABEL_LEN),
+        project: truncate(project, common::event::MAX_LABEL_LEN),
         sdk_version: "otel-bridge".to_owned(),
         extra: None,
         finish_reason,
@@ -443,7 +453,7 @@ mod tests {
             ],
             status: Some(OtlpStatus { code: 1, message: None }),
         };
-        let ev = map_span(&span, "production").expect("event");
+        let ev = map_span(&span, "production", "").expect("event");
         assert_eq!(ev.kind, "llm");
         assert_eq!(ev.provider, "openai");
         assert_eq!(ev.model, "gpt-4o");
@@ -468,12 +478,13 @@ mod tests {
             attributes: vec![],
             status: None,
         };
-        let ev = map_span(&span, "staging").expect("event");
+        let ev = map_span(&span, "staging", "svc-a").expect("event");
         assert_eq!(ev.kind, "workflow");
         assert_eq!(ev.model, "");
         assert_eq!(ev.input_tokens, 0);
         assert_eq!(ev.parent_span_id, None);
         assert_eq!(ev.environment, "staging");
+        assert_eq!(ev.project, "svc-a");
         assert!(ev.validate().is_ok());
     }
 
@@ -489,7 +500,7 @@ mod tests {
             attributes: vec![kv("gen_ai.system", "anthropic")],
             status: Some(OtlpStatus { code: 2, message: Some("overloaded".into()) }),
         };
-        let ev = map_span(&span, "production").unwrap();
+        let ev = map_span(&span, "production", "").unwrap();
         assert_eq!(ev.status, "error");
         assert_eq!(ev.error_message.as_deref(), Some("overloaded"));
     }

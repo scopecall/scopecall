@@ -225,6 +225,7 @@ mod tests {
                 cost_source: None,
                 pricing_version: None,
                 environment: "test".into(),
+                project: "".into(),
                 sdk_version: "test".into(),
                 extra: None,
                 finish_reason: None,

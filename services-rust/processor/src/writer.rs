@@ -75,6 +75,8 @@ pub struct LlmCallRow<'a> {
     /// v0.3: pricing-table version that produced cost_usd. YYYY-MM-DD.
     pub pricing_version: Option<&'a str>,
     pub environment: &'a str,
+    /// Application/service label, "" = unassigned. v0.4.
+    pub project: &'a str,
     pub sdk_version: &'a str,
     pub extra: Option<&'a str>,
     pub finish_reason: Option<&'a str>,
@@ -129,6 +131,7 @@ impl<'a> From<&'a EnrichedEvent> for LlmCallRow<'a> {
             cost_source: e.event.cost_source.as_deref().unwrap_or("unknown_model"),
             pricing_version: e.event.pricing_version.as_deref(),
             environment: e.event.environment.as_str(),
+            project: e.event.project.as_str(),
             sdk_version: e.event.sdk_version.as_str(),
             extra: e.event.extra.as_deref(),
             finish_reason: e.event.finish_reason.as_deref(),
