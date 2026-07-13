@@ -46,7 +46,7 @@ type CostConfidenceResult struct {
 //
 // Both are restricted to kind='llm' so container rows (intrinsic cost_source =
 // 'container') don't get conflated with real pricing-table misses.
-func CostConfidence(ctx context.Context, ch driver.Conn, orgID string, tw TimeWindow, unknownLimit int) (*CostConfidenceResult, error) {
+func CostConfidence(ctx context.Context, ch driver.Conn, orgID string, tw TimeWindow, unknownLimit int, scope Scope) (*CostConfidenceResult, error) {
 	if unknownLimit <= 0 {
 		unknownLimit = 10
 	}
@@ -66,14 +66,15 @@ FROM llm_calls
 WHERE org_id    = {org_id:String}
   AND kind      = 'llm'
   AND timestamp >= {from:DateTime('UTC')}
-  AND timestamp <  {to:DateTime('UTC')}
+  AND timestamp <  {to:DateTime('UTC')}` + scope.cond("") + `
 GROUP BY src
 ORDER BY cost DESC`
-	rows, err := ch.Query(ctx, srcQ,
-		driver.NamedValue{Name: "org_id", Value: orgID},
-		driver.NamedValue{Name: "from", Value: chDateTime(tw.From)},
-		driver.NamedValue{Name: "to", Value: chDateTime(tw.To)},
-	)
+	args := scope.params([]driver.NamedValue{
+		{Name: "org_id", Value: orgID},
+		{Name: "from", Value: chDateTime(tw.From)},
+		{Name: "to", Value: chDateTime(tw.To)},
+	})
+	rows, err := ch.Query(ctx, srcQ, args...)
 	if err != nil {
 		return nil, fmt.Errorf("cost-confidence sources: %w", err)
 	}
@@ -114,17 +115,18 @@ WHERE org_id      = {org_id:String}
   AND cost_source = 'unknown_model'
   AND model != ''
   AND timestamp >= {from:DateTime('UTC')}
-  AND timestamp <  {to:DateTime('UTC')}
+  AND timestamp <  {to:DateTime('UTC')}` + scope.cond("") + `
 GROUP BY model, provider
 ORDER BY calls DESC
 LIMIT {lim:UInt32}`
-	unkRows, err := ch.Query(ctx, unkQ,
-		driver.NamedValue{Name: "org_id", Value: orgID},
-		driver.NamedValue{Name: "from", Value: chDateTime(tw.From)},
-		driver.NamedValue{Name: "to", Value: chDateTime(tw.To)},
+	unkArgs := scope.params([]driver.NamedValue{
+		{Name: "org_id", Value: orgID},
+		{Name: "from", Value: chDateTime(tw.From)},
+		{Name: "to", Value: chDateTime(tw.To)},
 		// CH named params transmit as strings (see types.go).
-		driver.NamedValue{Name: "lim", Value: strconv.Itoa(unknownLimit)},
-	)
+		{Name: "lim", Value: strconv.Itoa(unknownLimit)},
+	})
+	unkRows, err := ch.Query(ctx, unkQ, unkArgs...)
 	if err != nil {
 		return nil, fmt.Errorf("cost-confidence unknown-models: %w", err)
 	}

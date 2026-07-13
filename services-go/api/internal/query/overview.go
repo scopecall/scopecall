@@ -22,8 +22,8 @@ type OverviewResult struct {
 	UniqueTraces uint64
 }
 
-func Overview(ctx context.Context, ch driver.Conn, orgID string, tw TimeWindow) (*OverviewResult, error) {
-	const q = `
+func Overview(ctx context.Context, ch driver.Conn, orgID string, tw TimeWindow, scope Scope) (*OverviewResult, error) {
+	q := `
 SELECT
     count()                                                      AS total_calls,
     sum(cost_usd)                                                AS total_cost_usd,
@@ -43,12 +43,13 @@ WHERE org_id = {org_id:String}
   AND kind = 'llm'
   AND timestamp >= {from:DateTime('UTC')}
   AND timestamp <  {to:DateTime('UTC')}
-`
-	row := ch.QueryRow(ctx, q,
-		driver.NamedValue{Name: "org_id", Value: orgID},
-		driver.NamedValue{Name: "from", Value: chDateTime(tw.From)},
-		driver.NamedValue{Name: "to", Value: chDateTime(tw.To)},
-	)
+` + scope.cond("")
+	args := scope.params([]driver.NamedValue{
+		{Name: "org_id", Value: orgID},
+		{Name: "from", Value: chDateTime(tw.From)},
+		{Name: "to", Value: chDateTime(tw.To)},
+	})
+	row := ch.QueryRow(ctx, q, args...)
 
 	var r OverviewResult
 	if err := row.Scan(

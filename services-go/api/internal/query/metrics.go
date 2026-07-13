@@ -21,7 +21,7 @@ type MetricPoint struct {
 // Granularity is "hour" (default) or "day". Day groups the per-hour rollup
 // rows up via toStartOfDay; avgMerge/quantileMerge across hourly aggregate
 // states is mathematically correct (the states are designed to compose).
-func Metrics(ctx context.Context, ch driver.Conn, orgID string, tw TimeWindow, granularity string) ([]MetricPoint, error) {
+func Metrics(ctx context.Context, ch driver.Conn, orgID string, tw TimeWindow, granularity string, scope Scope) ([]MetricPoint, error) {
 	// Default to hourly; only "day" switches behaviour.
 	bucketExpr := "hour"
 	if granularity == "day" {
@@ -49,11 +49,41 @@ ORDER BY bucket ASC, model ASC
 LIMIT 50000
 `, bucketExpr)
 
-	rows, err := ch.Query(ctx, q,
-		driver.NamedValue{Name: "org_id", Value: orgID},
-		driver.NamedValue{Name: "from", Value: chDateTime(tw.From)},
-		driver.NamedValue{Name: "to", Value: chDateTime(tw.To)},
-	)
+	// The hourly rollup doesn't carry environment/project, so a scoped
+	// request falls back to a raw llm_calls scan — same precedent as
+	// breakdown's environment group-by. Slower but correct; scoped views
+	// are interactive drill-ins, not the default org-wide dashboard load.
+	if scope != (Scope{}) {
+		rawBucket := "toStartOfHour(timestamp)"
+		if granularity == "day" {
+			rawBucket = "toStartOfDay(timestamp)"
+		}
+		q = fmt.Sprintf(`
+SELECT
+    %s                                  AS bucket,
+    model,
+    count()                             AS call_count,
+    sum(cost_usd)                       AS total_cost_usd,
+    ifNotFinite(avg(latency_ms), 0)     AS avg_latency_ms,
+    ifNotFinite(quantile(0.99)(latency_ms), 0) AS p99_latency_ms,
+    countIf(status = 'error')           AS error_count
+FROM llm_calls
+WHERE org_id = {org_id:String}
+  AND kind = 'llm'
+  AND timestamp >= {from:DateTime('UTC')}
+  AND timestamp <  {to:DateTime('UTC')}%s
+GROUP BY bucket, model
+ORDER BY bucket ASC, model ASC
+LIMIT 50000
+`, rawBucket, scope.cond(""))
+	}
+
+	args := scope.params([]driver.NamedValue{
+		{Name: "org_id", Value: orgID},
+		{Name: "from", Value: chDateTime(tw.From)},
+		{Name: "to", Value: chDateTime(tw.To)},
+	})
+	rows, err := ch.Query(ctx, q, args...)
 	if err != nil {
 		return nil, fmt.Errorf("metrics query: %w", err)
 	}

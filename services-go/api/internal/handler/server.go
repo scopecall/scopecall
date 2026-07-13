@@ -31,7 +31,7 @@ func (s *Server) GetOverview(ctx context.Context, req gen.GetOverviewRequestObje
 	}
 
 	tw := query.TimeWindow{From: req.Params.From, To: req.Params.To}
-	res, err := query.Overview(ctx, s.CH, claims.OrgID, tw)
+	res, err := query.Overview(ctx, s.CH, claims.OrgID, tw, ScopeFromCtx(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -84,6 +84,7 @@ func (s *Server) ListTraces(ctx context.Context, req gen.ListTracesRequestObject
 	args.Provider = ctxStr(ctx, keyProvider)
 	args.UserID = ctxStr(ctx, keyUserID)
 	args.Environment = ctxStr(ctx, keyEnvironment)
+	args.Project = ctxStr(ctx, keyProject)
 	args.FeatureName = ctxStr(ctx, keyFeatureName)
 	args.Query = ctxStr(ctx, keyQuery)
 	args.PromptVersion = ctxStr(ctx, keyPromptVersion)
@@ -130,7 +131,7 @@ func (s *Server) GetCostMetrics(ctx context.Context, req gen.GetCostMetricsReque
 	if req.Params.OrgId != claims.OrgID {
 		return gen.GetCostMetrics400ApplicationProblemPlusJSONResponse{ProblemApplicationProblemPlusJSONResponse: probResponse(http.StatusBadRequest, "Bad Request", "org_id does not match authenticated organization")}, nil
 	}
-	pts, err := query.Metrics(ctx, s.CH, claims.OrgID, query.TimeWindow{From: req.Params.From, To: req.Params.To}, granularityStr(req.Params.Granularity))
+	pts, err := query.Metrics(ctx, s.CH, claims.OrgID, query.TimeWindow{From: req.Params.From, To: req.Params.To}, granularityStr(req.Params.Granularity), ScopeFromCtx(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -142,7 +143,7 @@ func (s *Server) GetLatencyMetrics(ctx context.Context, req gen.GetLatencyMetric
 	if req.Params.OrgId != claims.OrgID {
 		return gen.GetLatencyMetrics400ApplicationProblemPlusJSONResponse{ProblemApplicationProblemPlusJSONResponse: probResponse(http.StatusBadRequest, "Bad Request", "org_id does not match authenticated organization")}, nil
 	}
-	pts, err := query.Metrics(ctx, s.CH, claims.OrgID, query.TimeWindow{From: req.Params.From, To: req.Params.To}, granularityStr(req.Params.Granularity))
+	pts, err := query.Metrics(ctx, s.CH, claims.OrgID, query.TimeWindow{From: req.Params.From, To: req.Params.To}, granularityStr(req.Params.Granularity), ScopeFromCtx(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -154,7 +155,7 @@ func (s *Server) GetErrorMetrics(ctx context.Context, req gen.GetErrorMetricsReq
 	if req.Params.OrgId != claims.OrgID {
 		return gen.GetErrorMetrics400ApplicationProblemPlusJSONResponse{ProblemApplicationProblemPlusJSONResponse: probResponse(http.StatusBadRequest, "Bad Request", "org_id does not match authenticated organization")}, nil
 	}
-	pts, err := query.Metrics(ctx, s.CH, claims.OrgID, query.TimeWindow{From: req.Params.From, To: req.Params.To}, granularityStr(req.Params.Granularity))
+	pts, err := query.Metrics(ctx, s.CH, claims.OrgID, query.TimeWindow{From: req.Params.From, To: req.Params.To}, granularityStr(req.Params.Granularity), ScopeFromCtx(ctx))
 	if err != nil {
 		return nil, err
 	}

@@ -51,23 +51,25 @@ type WasteItem struct {
 // independent CH queries — one per rule — and merges the results. Each rule
 // is bounded (top N per rule) so a pathological tenant can't blow up the
 // response.
-func WasteInbox(ctx context.Context, ch driver.Conn, orgID string, tw TimeWindow) ([]WasteItem, error) {
+func WasteInbox(ctx context.Context, ch driver.Conn, orgID string, tw TimeWindow, scope Scope) ([]WasteItem, error) {
 	// Total spend in the window — used for severity thresholding so a $10K
 	// org and a $10 org both see useful items. Computed once, passed to each
 	// rule. Falls back to 0 (no severity-tier amplification) on error.
 	var grand float64
 	{
+		grandArgs := scope.params([]driver.NamedValue{
+			{Name: "org_id", Value: orgID},
+			{Name: "from", Value: chDateTime(tw.From)},
+			{Name: "to", Value: chDateTime(tw.To)},
+		})
 		row := ch.QueryRow(ctx, `
 SELECT sum(cost_usd)
 FROM llm_calls
 WHERE org_id    = {org_id:String}
   AND kind      = 'llm'
   AND timestamp >= {from:DateTime('UTC')}
-  AND timestamp <  {to:DateTime('UTC')}`,
-			driver.NamedValue{Name: "org_id", Value: orgID},
-			driver.NamedValue{Name: "from", Value: chDateTime(tw.From)},
-			driver.NamedValue{Name: "to", Value: chDateTime(tw.To)},
-		)
+  AND timestamp <  {to:DateTime('UTC')}`+scope.cond(""),
+			grandArgs...)
 		_ = row.Scan(&grand)
 	}
 
@@ -99,17 +101,18 @@ FROM llm_calls l
 LEFT JOIN workflow_map wm ON l.trace_id = wm.trace_id
 WHERE l.org_id = {org_id:String}
   AND l.kind   = 'llm'
-  AND l.timestamp >= {from:DateTime('UTC')} AND l.timestamp < {to:DateTime('UTC')}
+  AND l.timestamp >= {from:DateTime('UTC')} AND l.timestamp < {to:DateTime('UTC')}` + scope.cond("l.") + `
 GROUP BY workflow, model
 HAVING retry_cost > 0.001 AND total_cost > 0
    AND retry_cost / total_cost > 0.10
 ORDER BY retry_cost DESC
 LIMIT 5`
-		rows, err := ch.Query(ctx, q,
-			driver.NamedValue{Name: "org_id", Value: orgID},
-			driver.NamedValue{Name: "from", Value: chDateTime(tw.From)},
-			driver.NamedValue{Name: "to", Value: chDateTime(tw.To)},
-		)
+		ruleArgs := scope.params([]driver.NamedValue{
+			{Name: "org_id", Value: orgID},
+			{Name: "from", Value: chDateTime(tw.From)},
+			{Name: "to", Value: chDateTime(tw.To)},
+		})
+		rows, err := ch.Query(ctx, q, ruleArgs...)
 		if err != nil {
 			return nil, fmt.Errorf("waste-inbox retries: %w", err)
 		}
@@ -176,7 +179,7 @@ per_step_model AS (
     WHERE l.org_id = {org_id:String}
       AND l.kind   = 'llm'
       AND l.cost_usd > 0
-      AND l.timestamp >= {from:DateTime('UTC')} AND l.timestamp < {to:DateTime('UTC')}
+      AND l.timestamp >= {from:DateTime('UTC')} AND l.timestamp < {to:DateTime('UTC')}` + scope.cond("l.") + `
     GROUP BY step_name, model
     HAVING calls >= 2
 ),
@@ -201,11 +204,12 @@ WHERE psm.avg_cost > sc.cheap_avg * 3
   AND (psm.avg_cost - sc.cheap_avg) * psm.calls > 0.005
 ORDER BY potential_savings DESC
 LIMIT 5`
-		rows, err := ch.Query(ctx, q,
-			driver.NamedValue{Name: "org_id", Value: orgID},
-			driver.NamedValue{Name: "from", Value: chDateTime(tw.From)},
-			driver.NamedValue{Name: "to", Value: chDateTime(tw.To)},
-		)
+		ruleArgs := scope.params([]driver.NamedValue{
+			{Name: "org_id", Value: orgID},
+			{Name: "from", Value: chDateTime(tw.From)},
+			{Name: "to", Value: chDateTime(tw.To)},
+		})
+		rows, err := ch.Query(ctx, q, ruleArgs...)
 		if err != nil {
 			return nil, fmt.Errorf("waste-inbox model-misuse: %w", err)
 		}
@@ -270,17 +274,18 @@ FROM llm_calls l
 LEFT JOIN workflow_map wm ON l.trace_id = wm.trace_id
 WHERE l.org_id = {org_id:String}
   AND l.kind   = 'llm'
-  AND l.timestamp >= {from:DateTime('UTC')} AND l.timestamp < {to:DateTime('UTC')}
+  AND l.timestamp >= {from:DateTime('UTC')} AND l.timestamp < {to:DateTime('UTC')}` + scope.cond("l.") + `
 GROUP BY workflow
 HAVING total_calls >= 10
    AND error_calls / total_calls > 0.05
 ORDER BY error_calls DESC
 LIMIT 5`
-		rows, err := ch.Query(ctx, q,
-			driver.NamedValue{Name: "org_id", Value: orgID},
-			driver.NamedValue{Name: "from", Value: chDateTime(tw.From)},
-			driver.NamedValue{Name: "to", Value: chDateTime(tw.To)},
-		)
+		ruleArgs := scope.params([]driver.NamedValue{
+			{Name: "org_id", Value: orgID},
+			{Name: "from", Value: chDateTime(tw.From)},
+			{Name: "to", Value: chDateTime(tw.To)},
+		})
+		rows, err := ch.Query(ctx, q, ruleArgs...)
 		if err != nil {
 			return nil, fmt.Errorf("waste-inbox errors: %w", err)
 		}

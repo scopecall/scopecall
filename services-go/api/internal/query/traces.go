@@ -85,6 +85,8 @@ type ListTracesArgs struct {
 	FeatureName string
 	UserID      string
 	Environment string
+	// v0.4 — application/service dimension, orthogonal to environment.
+	Project string
 	// Prompt version filter — supports the same nullSentinel as other
 	// dimensions so the Prompts page's "(none)" row can drill into untagged
 	// calls.
@@ -206,6 +208,7 @@ func ListTraces(ctx context.Context, ch driver.Conn, args ListTracesArgs) (*List
 		{"feature_name", "feature_name", args.FeatureName},
 		{"user_id", "user_id", args.UserID},
 		{"environment", "environment", args.Environment},
+		{"project", "project", args.Project},
 		{"prompt_version", "prompt_version", args.PromptVersion},
 		{"customer_id", "customer_id", args.CustomerID},
 	}

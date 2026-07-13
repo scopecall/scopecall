@@ -73,7 +73,8 @@ func (s *Server) GetTopMoversHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	rows, err := query.TopMovers(r.Context(), s.CH, claims.OrgID, query.TimeWindow{From: from, To: to}, groupBy, limit)
+	scope := query.Scope{Environment: q.Get("environment"), Project: q.Get("project")}
+	rows, err := query.TopMovers(r.Context(), s.CH, claims.OrgID, query.TimeWindow{From: from, To: to}, groupBy, limit, scope)
 	if err != nil {
 		problem.Write(w, http.StatusInternalServerError, "Internal Server Error", "top-movers query failed")
 		return

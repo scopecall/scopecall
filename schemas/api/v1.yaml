@@ -26,6 +26,20 @@ components:
         Dispatched by prefix. Single Authorization: Bearer header.
 
   parameters:
+    EnvironmentScope:
+      name: environment
+      in: query
+      required: false
+      schema:
+        type: string
+      description: v0.4 — scope to one environment (server tier).
+    ProjectScope:
+      name: project
+      in: query
+      required: false
+      schema:
+        type: string
+      description: v0.4 — scope to one project (application/service label, orthogonal to environment).
     OrgId:
       name: org_id
       in: query
@@ -890,6 +904,8 @@ paths:
         - $ref: "#/components/parameters/OrgId"
         - $ref: "#/components/parameters/From"
         - $ref: "#/components/parameters/To"
+        - $ref: "#/components/parameters/EnvironmentScope"
+        - $ref: "#/components/parameters/ProjectScope"
       responses:
         "200":
           description: Overview statistics
@@ -957,6 +973,12 @@ paths:
           required: false
           schema:
             type: string
+        - name: project
+          in: query
+          required: false
+          schema:
+            type: string
+          description: v0.4 — scope to one project (application/service label, orthogonal to environment).
         - name: prompt_version
           in: query
           required: false
@@ -1067,6 +1089,8 @@ paths:
         - $ref: "#/components/parameters/From"
         - $ref: "#/components/parameters/To"
         - $ref: "#/components/parameters/Granularity"
+        - $ref: "#/components/parameters/EnvironmentScope"
+        - $ref: "#/components/parameters/ProjectScope"
       responses:
         "200":
           description: Cost metric points
@@ -1088,6 +1112,8 @@ paths:
         - $ref: "#/components/parameters/From"
         - $ref: "#/components/parameters/To"
         - $ref: "#/components/parameters/Granularity"
+        - $ref: "#/components/parameters/EnvironmentScope"
+        - $ref: "#/components/parameters/ProjectScope"
       responses:
         "200":
           description: Latency metric points
@@ -1109,6 +1135,8 @@ paths:
         - $ref: "#/components/parameters/From"
         - $ref: "#/components/parameters/To"
         - $ref: "#/components/parameters/Granularity"
+        - $ref: "#/components/parameters/EnvironmentScope"
+        - $ref: "#/components/parameters/ProjectScope"
       responses:
         "200":
           description: Error metric points
@@ -1222,6 +1250,8 @@ paths:
             minimum: 1
             maximum: 50
             default: 10
+        - $ref: "#/components/parameters/EnvironmentScope"
+        - $ref: "#/components/parameters/ProjectScope"
       responses:
         "200":
           description: Dimension values ordered by absolute cost delta descending
@@ -1426,6 +1456,39 @@ paths:
         "403":
           $ref: "#/components/responses/Problem403"
 
+  /api/v1/projects:
+    get:
+      operationId: ListProjects
+      summary: Distinct project labels for the org
+      description: >
+        v0.4 — feeds the dashboard's project picker. Projects are
+        application/service labels set via SDK config (SCOPECALL_PROJECT),
+        orthogonal to environment (the server tier). Not windowed: quiet
+        projects stay selectable. The '' (unassigned) bucket is excluded.
+        Capped at 100 values.
+      parameters:
+        - name: org_id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Distinct non-empty project labels, alphabetical.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [projects]
+                properties:
+                  projects:
+                    type: array
+                    items:
+                      type: string
+        "401":
+          $ref: "#/components/responses/Problem401"
+        "403":
+          $ref: "#/components/responses/Problem403"
   /api/v1/sessions:
     get:
       operationId: ListSessions
@@ -1482,6 +1545,12 @@ paths:
           schema:
             type: string
           description: Match sessions with at least one call in this environment.
+        - name: project
+          in: query
+          required: false
+          schema:
+            type: string
+          description: v0.4 — match sessions with at least one call in this project.
         - name: limit
           in: query
           required: false
@@ -1529,6 +1598,12 @@ paths:
           schema:
             type: string
           description: Scope to one environment.
+        - name: project
+          in: query
+          required: false
+          schema:
+            type: string
+          description: v0.4 — scope to one project.
         - name: limit
           in: query
           required: false

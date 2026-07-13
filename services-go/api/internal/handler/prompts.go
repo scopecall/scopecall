@@ -78,6 +78,7 @@ func (s *Server) GetPromptsHTTP(w http.ResponseWriter, r *http.Request) {
 		query.TimeWindow{From: from, To: to},
 		q.Get("feature_name"),
 		q.Get("environment"),
+		q.Get("project"),
 		limit,
 	)
 	if err != nil {

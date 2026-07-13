@@ -56,7 +56,7 @@ type WorkflowCostTreeResult struct {
 // that used sdk.record_llm_call() bare) collapse into the "" workflow_name
 // bucket — surfaced on the frontend as an "Unattributed" tile so the user
 // can see how much cost is escaping the cost-attribution model.
-func WorkflowCostTree(ctx context.Context, ch driver.Conn, orgID string, tw TimeWindow, limit int) (*WorkflowCostTreeResult, error) {
+func WorkflowCostTree(ctx context.Context, ch driver.Conn, orgID string, tw TimeWindow, limit int, scope Scope) (*WorkflowCostTreeResult, error) {
 	if limit <= 0 {
 		limit = 20
 	}
@@ -115,7 +115,7 @@ agg AS (
     WHERE l.org_id    = {org_id:String}
       AND l.kind      = 'llm'
       AND l.timestamp >= {prior_from:DateTime('UTC')}
-      AND l.timestamp <  {to:DateTime('UTC')}
+      AND l.timestamp <  {to:DateTime('UTC')}` + scope.cond("l.") + `
     GROUP BY name
     HAVING curr_cost > 0 OR prior_cost > 0
 )
@@ -132,15 +132,16 @@ FROM agg
 ORDER BY curr_cost DESC
 LIMIT {lim:UInt32}`
 
-	rows, err := ch.Query(ctx, q,
-		driver.NamedValue{Name: "org_id", Value: orgID},
-		driver.NamedValue{Name: "from", Value: chDateTime(tw.From)},
-		driver.NamedValue{Name: "to", Value: chDateTime(tw.To)},
-		driver.NamedValue{Name: "prior_from", Value: chDateTime(priorFrom)},
+	args := scope.params([]driver.NamedValue{
+		{Name: "org_id", Value: orgID},
+		{Name: "from", Value: chDateTime(tw.From)},
+		{Name: "to", Value: chDateTime(tw.To)},
+		{Name: "prior_from", Value: chDateTime(priorFrom)},
 		// CH named params are wire-transmitted as strings and cast server-side
 		// per the {lim:UInt32} annotation — see types.go for the rationale.
-		driver.NamedValue{Name: "lim", Value: strconv.Itoa(limit)},
-	)
+		{Name: "lim", Value: strconv.Itoa(limit)},
+	})
+	rows, err := ch.Query(ctx, q, args...)
 	if err != nil {
 		return nil, fmt.Errorf("workflow-cost-tree query: %w", err)
 	}

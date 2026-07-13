@@ -3,6 +3,8 @@ package handler
 import (
 	"context"
 	"net/http"
+
+	"github.com/scopecall/services-go/api/internal/query"
 )
 
 // Extra traces filters (provider, user_id, environment, feature_name) aren't
@@ -36,6 +38,8 @@ const (
 	keyWorkflow
 	keyAgent
 	keyStep
+	// v0.4 — application/service dimension, orthogonal to environment.
+	keyProject
 )
 
 // WithTraceFilters reads provider/user_id/environment/feature_name from the
@@ -52,6 +56,9 @@ func WithTraceFilters(r *http.Request) context.Context {
 	}
 	if v := q.Get("environment"); v != "" {
 		ctx = context.WithValue(ctx, keyEnvironment, v)
+	}
+	if v := q.Get("project"); v != "" {
+		ctx = context.WithValue(ctx, keyProject, v)
 	}
 	if v := q.Get("feature_name"); v != "" {
 		ctx = context.WithValue(ctx, keyFeatureName, v)
@@ -75,6 +82,15 @@ func WithTraceFilters(r *http.Request) context.Context {
 		ctx = context.WithValue(ctx, keyStep, v)
 	}
 	return ctx
+}
+
+// ScopeFromCtx assembles the env/project narrowing for Overview-family
+// endpoints from values WithTraceFilters stashed on the context.
+func ScopeFromCtx(ctx context.Context) query.Scope {
+	return query.Scope{
+		Environment: ctxStr(ctx, keyEnvironment),
+		Project:     ctxStr(ctx, keyProject),
+	}
 }
 
 func ctxStr(ctx context.Context, k traceFilterKey) string {

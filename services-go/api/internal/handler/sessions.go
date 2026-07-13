@@ -68,6 +68,7 @@ func (s *Server) GetSessionsHTTP(w http.ResponseWriter, r *http.Request) {
 		Status:      q.Get("status"),
 		FeatureName: q.Get("feature_name"),
 		Environment: q.Get("environment"),
+		Project:     q.Get("project"),
 	}
 	if filters.Status != "" {
 		switch filters.Status {

@@ -56,7 +56,8 @@ func (s *Server) GetWasteInboxHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	items, err := query.WasteInbox(r.Context(), s.CH, claims.OrgID, query.TimeWindow{From: from, To: to})
+	scope := query.Scope{Environment: q.Get("environment"), Project: q.Get("project")}
+	items, err := query.WasteInbox(r.Context(), s.CH, claims.OrgID, query.TimeWindow{From: from, To: to}, scope)
 	if err != nil {
 		problem.Write(w, http.StatusInternalServerError, "Internal Server Error", "waste-inbox query failed")
 		return

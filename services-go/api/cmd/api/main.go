@@ -190,6 +190,10 @@ func main() {
 		// changes on the hour, not the second.
 		"waste_inbox":     60 * time.Second,
 		"cost_confidence": 60 * time.Second,
+		// Distinct project labels — changes only when a new SDK config
+		// ships, so a longer TTL would be fine; 60s keeps first-appearance
+		// latency (new project → visible in picker) tolerable.
+		"projects": 60 * time.Second,
 	}
 
 	// Per-org rate limit: 600 req/min per org_id. Sized for ~10-15 active
@@ -220,6 +224,10 @@ func main() {
 
 		r.With(apimw.Cache(rdb, cacheTTLs["overview"], "overview")).
 			Get("/api/v1/overview", func(w http.ResponseWriter, req *http.Request) {
+				// environment/project scope rides the context — the generated
+				// params can't grow fields (api.gen.go is pinned; see
+				// handler/traces_filters.go).
+				req = req.WithContext(handler.WithTraceFilters(req))
 				strictHandler.GetOverview(w, req, extractOverviewParams(req))
 			})
 
@@ -238,16 +246,19 @@ func main() {
 
 		r.With(apimw.Cache(rdb, cacheTTLs["metrics_cost"], "metrics_cost")).
 			Get("/api/v1/metrics/cost", func(w http.ResponseWriter, req *http.Request) {
+				req = req.WithContext(handler.WithTraceFilters(req))
 				strictHandler.GetCostMetrics(w, req, extractMetricsParams(req))
 			})
 
 		r.With(apimw.Cache(rdb, cacheTTLs["metrics_latency"], "metrics_latency")).
 			Get("/api/v1/metrics/latency", func(w http.ResponseWriter, req *http.Request) {
+				req = req.WithContext(handler.WithTraceFilters(req))
 				strictHandler.GetLatencyMetrics(w, req, extractLatencyMetricsParams(req))
 			})
 
 		r.With(apimw.Cache(rdb, cacheTTLs["metrics_errors"], "metrics_errors")).
 			Get("/api/v1/metrics/errors", func(w http.ResponseWriter, req *http.Request) {
+				req = req.WithContext(handler.WithTraceFilters(req))
 				strictHandler.GetErrorMetrics(w, req, extractErrorMetricsParams(req))
 			})
 
@@ -305,6 +316,10 @@ func main() {
 		// turns Top Movers into actionable "this got worse" signals.
 		r.With(apimw.Cache(rdb, cacheTTLs["regressions"], "regressions")).
 			Get("/api/v1/regressions", srv.GetRegressionsHTTP)
+
+		// Distinct project labels for the dashboard's project picker.
+		r.With(apimw.Cache(rdb, cacheTTLs["projects"], "projects")).
+			Get("/api/v1/projects", srv.GetProjectsHTTP)
 
 		// Workflow cost treemap — workflow-level cost rollup + prior-period
 		// delta. The Overview's primary "where is the money going?" tile.

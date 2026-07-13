@@ -36,11 +36,13 @@ type SessionFilters struct {
 	Status      string
 	FeatureName string
 	Environment string
+	// v0.4 — application/service dimension, orthogonal to environment.
+	Project string
 }
 
 func (f SessionFilters) hasAny() bool {
 	return f.Model != "" || f.Provider != "" || f.Status != "" ||
-		f.FeatureName != "" || f.Environment != ""
+		f.FeatureName != "" || f.Environment != "" || f.Project != ""
 }
 
 // ListSessions returns sessions in the window, sorted most-recent first.
@@ -90,6 +92,7 @@ func ListSessions(ctx context.Context, ch driver.Conn, orgID string, tw TimeWind
 		addFilter("status", "f_status", filters.Status)
 		addFilter("feature_name", "f_feature", filters.FeatureName)
 		addFilter("environment", "f_environment", filters.Environment)
+		addFilter("project", "f_project", filters.Project)
 		memberCond = fmt.Sprintf(`session_id IN (
     SELECT session_id
     FROM llm_calls

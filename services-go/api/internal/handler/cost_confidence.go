@@ -72,7 +72,8 @@ func (s *Server) GetCostConfidenceHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	res, err := query.CostConfidence(r.Context(), s.CH, claims.OrgID, query.TimeWindow{From: from, To: to}, unknownLimit)
+	scope := query.Scope{Environment: q.Get("environment"), Project: q.Get("project")}
+	res, err := query.CostConfidence(r.Context(), s.CH, claims.OrgID, query.TimeWindow{From: from, To: to}, unknownLimit, scope)
 	if err != nil {
 		problem.Write(w, http.StatusInternalServerError, "Internal Server Error", "cost-confidence query failed")
 		return

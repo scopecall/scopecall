@@ -46,7 +46,7 @@ func ListPrompts(
 	ch driver.Conn,
 	orgID string,
 	tw TimeWindow,
-	featureName, environment string,
+	featureName, environment, project string,
 	limit int,
 ) ([]PromptRow, error) {
 	if limit <= 0 {
@@ -69,6 +69,10 @@ func ListPrompts(
 	if environment != "" {
 		conds = append(conds, "environment = {environment:String}")
 		queryArgs = append(queryArgs, driver.NamedValue{Name: "environment", Value: environment})
+	}
+	if project != "" {
+		conds = append(conds, "project = {project:String}")
+		queryArgs = append(queryArgs, driver.NamedValue{Name: "project", Value: project})
 	}
 	whereExtra := "1=1"
 	if len(conds) > 0 {
