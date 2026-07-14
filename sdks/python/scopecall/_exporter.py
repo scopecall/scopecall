@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import atexit
 import json
+import os
 import logging
 import queue
 import threading
@@ -92,6 +93,27 @@ class Exporter:
         # atexit-driven drain is the safety net for callers who forget
         # to `sdk.close()`. Same role as TS's `attachProcessHooks`.
         atexit.register(self._on_atexit)
+
+        # Fork safety (Unix). Threads do NOT survive fork(): a
+        # `multiprocessing.Process` child inherits this exporter with a DEAD
+        # flusher thread, so every event the child records queues forever
+        # and is silently lost — and multiprocessing children exit via
+        # os._exit, skipping the atexit drain too. Same failure ddtrace /
+        # New Relic guard against. Rebuild the thread-state in the child.
+        if hasattr(os, "register_at_fork"):
+            os.register_at_fork(after_in_child=self._reinit_after_fork)
+        # The exit-drain for multiprocessing children CANNOT be registered
+        # from the at-fork handler: os.register_at_fork callbacks run inside
+        # os.fork(), and multiprocessing's child _bootstrap then clears the
+        # inherited finalizer registry — wiping anything registered there.
+        # util.register_after_fork runs AFTER that clear, so the Finalize
+        # registered below survives to the child's _exit_function.
+        try:
+            from multiprocessing import util as _mp_util
+
+            _mp_util.register_after_fork(self, Exporter._register_child_exit_drain)
+        except Exception:  # noqa: BLE001 — periodic flush still delivers
+            pass
 
     # ── Hot path ────────────────────────────────────────────────────────
 
@@ -169,6 +191,59 @@ class Exporter:
         try:
             self.close(timeout=2.0)
         except Exception:  # noqa: BLE001
+            pass
+
+    def _reinit_after_fork(self) -> None:
+        """Called in the CHILD after fork(): restart the flush machinery.
+
+        The child inherited a dead flusher thread, locks in unknown state,
+        the parent's TCP socket, and possibly the parent's unflushed events
+        (which the parent will deliver itself — shipping them here too
+        would double-send). Rebuild everything thread-shaped from scratch.
+        """
+        if self._shutdown_event.is_set():
+            return  # exporter was closed before the fork — stay closed
+        self._queue = queue.Queue(maxsize=self._config.queue_max_size)
+        self._shutdown_event = threading.Event()
+        self._flush_now = threading.Event()
+        self._file_lock = threading.Lock()
+        self._flush_lock = threading.Lock()
+        if self._config.mode == "api":
+            # Fresh HTTP client — the inherited one shares the parent's
+            # connection pool / sockets, which is undefined across fork.
+            try:
+                self._http = httpx.Client(
+                    headers={
+                        "Content-Type": "application/json",
+                        "Authorization": f"Bearer {self._config.api_key or ''}",
+                        "User-Agent": f"scopecall-python/{__version__}",
+                        "X-ScopeCall-SDK": "python",
+                    },
+                    timeout=10.0,
+                )
+            except Exception:  # noqa: BLE001 — keep whatever we inherited
+                pass
+        self._thread = threading.Thread(
+            target=self._run, daemon=True, name="scopecall-exporter"
+        )
+        self._thread.start()
+    def _register_child_exit_drain(self) -> None:
+        """Runs in a multiprocessing CHILD (via util.register_after_fork).
+
+        mp children bypass the atexit module — they exit through
+        util._exit_function + os._exit — so the constructor's atexit drain
+        never fires in them. A multiprocessing.util.Finalize DOES run there,
+        and this hook executes after _bootstrap's registry clear, so it
+        sticks. Raw os.fork() children don't need this: they exit through
+        normal interpreter shutdown, where the inherited atexit drain runs.
+        """
+        if self._shutdown_event.is_set():
+            return
+        try:
+            from multiprocessing import util as _mp_util
+
+            _mp_util.Finalize(self, self._on_atexit, exitpriority=100)
+        except Exception:  # noqa: BLE001 — periodic flush still delivers
             pass
 
     def _run(self) -> None:

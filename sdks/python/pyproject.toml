@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "scopecall-py"
-version = "0.4.0"
+version = "0.4.1"
 description = "Open-source, self-hostable AI observability — scope every LLM call in production"
 readme = "README.md"
 requires-python = ">=3.9"
