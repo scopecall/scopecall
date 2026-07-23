@@ -4,4 +4,4 @@ Bumped in lockstep with pyproject.toml. Surfaced on every emitted event
 as `sdk_version` so the dashboard can report per-SDK adoption.
 """
 
-__version__ = "0.4.1"
+__version__ = "0.5.0"

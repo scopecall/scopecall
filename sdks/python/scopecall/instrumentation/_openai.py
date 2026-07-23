@@ -134,6 +134,8 @@ def _traced_create_sync(
         _emit_nonstreaming(
             sdk, kwargs, response, timestamp_ms, start_mono, ctx_snapshot
         )
+        # Best-effort prompt-quality audit (sync non-streaming path only).
+        _maybe_audit_openai(sdk, original_create, kwargs, response, ctx_snapshot)
         return response
 
 
@@ -330,6 +332,79 @@ def _extract_model(kwargs: dict[str, Any]) -> str:
     return str(m) if m else ""
 
 
+def _extract_cache_read_tokens(usage: Any) -> int | None:
+    """Read cache-read (prompt-cache-hit) input tokens off a usage object.
+
+    Primary source is OpenAI's `usage.prompt_tokens_details.cached_tokens`.
+    When that's absent, fall back to DeepSeek's OpenAI-compatible shape,
+    which reports cache hits as a flat `usage.prompt_cache_hit_tokens`
+    (DeepSeek flows through the OpenAI client). Returns None when neither
+    is present so the wire field stays null rather than a spurious 0."""
+    if usage is None:
+        return None
+    details = getattr(usage, "prompt_tokens_details", None)
+    if details is not None:
+        cached = getattr(details, "cached_tokens", None)
+        if cached is not None:
+            return cached
+    return getattr(usage, "prompt_cache_hit_tokens", None)
+
+
+def _maybe_audit_openai(
+    sdk: ScopeCallSDK,
+    original_create: Any,
+    request_kwargs: dict[str, Any],
+    response: Any,
+    ctx_snapshot: _context.TraceContext | None,
+) -> None:
+    """Schedule a best-effort prompt-quality audit reusing THIS client.
+
+    Borrows `original_create` (the UNWRAPPED create) so the audit completion
+    doesn't re-enter our own tracing wrapper, runs on the same `model`, and is
+    handed to the audit manager which does the dedup/cap/off-thread work.
+    Sync non-streaming only — async and streaming paths are skipped. Wrapped
+    so a missing attribute never raises into host code."""
+    try:
+        prompt_text = extract_messages_text(request_kwargs.get("messages", []))
+        if not prompt_text:
+            return
+        model = str(getattr(response, "model", "") or _extract_model(request_kwargs))
+        if not model:
+            return
+        ctx = ctx_snapshot if ctx_snapshot is not None else _context.get_current()
+        feature = (ctx.feature_name if ctx else None) or sdk._config.default_feature
+        prompt_version = (
+            (ctx.prompt_version if ctx else None) or sdk._config.default_prompt_version
+        )
+
+        def call_llm(audit_prompt: str) -> Any:
+            with _context.suppress_llm_emit_scope():
+                resp = original_create(
+                    model=model,
+                    messages=[{"role": "user", "content": audit_prompt}],
+                    temperature=0,
+                )
+                choices = getattr(resp, "choices", None) or []
+                if not choices:
+                    return None
+                msg = getattr(choices[0], "message", None)
+                return getattr(msg, "content", None) if msg is not None else None
+
+        from .._audit import get_audit_manager
+
+        get_audit_manager(sdk).maybe_audit(
+            feature_name=feature,
+            prompt_version=prompt_version,
+            prompt_text=prompt_text,
+            model=model,
+            provider=PROVIDER,
+            project=sdk._config.project,
+            call_llm=call_llm,
+        )
+    except Exception:  # noqa: BLE001 — never break the host
+        pass
+
+
 def _accumulate_chunk(chunk: Any, chunks_text: list[str]) -> None:
     """Pull text out of a streaming chunk's choices[0].delta.content
     if present. Tolerates None / missing attributes from the SDK."""
@@ -374,11 +449,7 @@ def _emit_nonstreaming(
     input_tokens = getattr(usage, "prompt_tokens", 0) if usage else 0
     output_tokens = getattr(usage, "completion_tokens", 0) if usage else 0
 
-    cache_read_tokens: int | None = None
-    if usage is not None:
-        details = getattr(usage, "prompt_tokens_details", None)
-        if details is not None:
-            cache_read_tokens = getattr(details, "cached_tokens", None)
+    cache_read_tokens = _extract_cache_read_tokens(usage)
 
     output_text = ""
     finish_reason: str | None = None
@@ -436,13 +507,10 @@ def _emit_from_stream(
     """
     input_tokens = 0
     output_tokens = 0
-    cache_read_tokens: int | None = None
+    cache_read_tokens = _extract_cache_read_tokens(usage)
     if usage is not None:
         input_tokens = int(getattr(usage, "prompt_tokens", 0) or 0)
         output_tokens = int(getattr(usage, "completion_tokens", 0) or 0)
-        details = getattr(usage, "prompt_tokens_details", None)
-        if details is not None:
-            cache_read_tokens = getattr(details, "cached_tokens", None)
 
     input_text = extract_messages_text(request_kwargs.get("messages", []))
 

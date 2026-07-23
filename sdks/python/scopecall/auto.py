@@ -21,7 +21,9 @@ composes — auto is the convenience layer, not a replacement.
 
 Env vars: SCOPECALL_API_KEY (required to enable), SCOPECALL_ENDPOINT,
 SCOPECALL_ENV, SCOPECALL_PROJECT, SCOPECALL_TEST, SCOPECALL_DEBUG (console transport),
-SCOPECALL_OUTPUT (NDJSON file).
+SCOPECALL_OUTPUT (NDJSON file), SCOPECALL_PROMPT_AUDIT (0/off/false disables the
+Phase-B prompt-quality audit), SCOPECALL_PROMPT_AUDIT_MAX (per-process audit cap,
+default 10).
 
 Full auto-on-import needs ``wrapt`` (``pip install scopecall-py[auto]``).
 Without it, only already-imported modules are patched (so import order
@@ -74,6 +76,11 @@ def _ensure_sdk():
             kwargs["project"] = os.getenv("SCOPECALL_PROJECT")
         if _truthy(os.getenv("SCOPECALL_TEST")):
             kwargs["test"] = True
+        # Prompt audit is on by default; SCOPECALL_PROMPT_AUDIT=0/off/false/no
+        # disables it (mirrors the config `prompt_audit` flag).
+        pa = os.getenv("SCOPECALL_PROMPT_AUDIT")
+        if pa is not None and pa.strip().lower() in ("0", "off", "false", "no"):
+            kwargs["prompt_audit"] = False
         return _sdk.init(**kwargs)
     except Exception as exc:  # pragma: no cover - defensive
         print(f"[scopecall.auto] init failed, disabled: {exc}")

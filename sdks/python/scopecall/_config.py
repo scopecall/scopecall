@@ -63,6 +63,17 @@ class ScopeCallConfig:
     redact_pii: bool = True
     capture_content: bool = True
 
+    # ── Prompt audit (v0.5) ──────────────────────────────────────────────
+    # When True, the SDK opportunistically runs a one-off "prompt quality"
+    # audit per distinct prompt-shape per process, reusing the host app's own
+    # LLM client (temperature 0, in a background daemon thread, best-effort).
+    # The findings are stored via the ingest Phase-B endpoints and surfaced in
+    # the dashboard's Optimization Gaps panel. Disable via
+    # prompt_audit=False or the SCOPECALL_PROMPT_AUDIT=0/off/false env var
+    # (resolved in scopecall.auto). Hard per-process cap is governed by
+    # SCOPECALL_PROMPT_AUDIT_MAX (default 10).
+    prompt_audit: bool = True
+
     # ── Auto-flush ───────────────────────────────────────────────────────
     # Background thread flushes the queue this often (seconds). 5 s aligns
     # with the TS SDK's flushIntervalMs=5000 default. The first-run UI's

@@ -34,6 +34,39 @@ if TYPE_CHECKING:
 PROVIDER = "google"
 _PATCHED = "_scopecall_instrumented"
 
+# The Gemini API returns finish_reason as an enum/int. The dashboard's
+# truncation analyzer keys off the STRING names, so normalize here. Codes per
+# the google.ai.generativelanguage FinishReason enum.
+_FINISH_REASONS = {
+    0: "FINISH_REASON_UNSPECIFIED",
+    1: "STOP",
+    2: "MAX_TOKENS",
+    3: "SAFETY",
+    4: "RECITATION",
+    5: "OTHER",
+}
+
+
+def _normalize_finish_reason(fr: Any) -> str | None:
+    """Map Gemini's finish_reason to its canonical string name.
+
+    Accepts an enum (uses `.name`, e.g. FinishReason.MAX_TOKENS -> "MAX_TOKENS"),
+    an int or int-like string (1 -> "STOP", 2 -> "MAX_TOKENS", ...), or an
+    already-normalized string ("STOP" passes through unchanged). Returns None
+    for None. Previously this stored the raw "1"/"2", which made truncation
+    (MAX_TOKENS) undetectable downstream."""
+    if fr is None:
+        return None
+    # Enum path: google's FinishReason / protobuf enums expose `.name`.
+    name = getattr(fr, "name", None)
+    if isinstance(name, str) and name:
+        return name
+    # Int (or digit string) path: map the numeric code to a canonical name.
+    try:
+        return _FINISH_REASONS.get(int(fr), str(fr))
+    except (TypeError, ValueError):
+        return str(fr)
+
 
 def instrument_gemini(model_or_module: Any, sdk: ScopeCallSDK) -> None:
     """Instrument Gemini. Accepts either the `google.generativeai` module or
@@ -72,6 +105,7 @@ def _patch_generative_model(GenerativeModel: Any, sdk: ScopeCallSDK) -> None:
                       status=_status(exc), error_message=str(exc))
                 raise
             _emit(sdk, self, resp, args, kwargs, ts, start, ctx)
+            _maybe_audit_gemini(sdk, self, args, kwargs, ctx)
             return resp
         GenerativeModel.generate_content = wrapped
 
@@ -127,8 +161,9 @@ def _emit(sdk: ScopeCallSDK, model_obj: Any, response: Any, args: tuple, kwargs:
     try:
         cands = getattr(response, "candidates", None) or []
         if cands:
-            fr = getattr(cands[0], "finish_reason", None)
-            finish_reason = str(fr) if fr is not None else None
+            finish_reason = _normalize_finish_reason(
+                getattr(cands[0], "finish_reason", None)
+            )
     except Exception:  # noqa: BLE001
         pass
 
@@ -189,3 +224,40 @@ def _status(exc: BaseException) -> str:
     if "Timeout" in name or "timeout" in msg or "deadline" in msg:
         return "timeout"
     return "error"
+
+
+def _maybe_audit_gemini(sdk: ScopeCallSDK, model_obj: Any, args: tuple, kwargs: dict,
+                        ctx: Any) -> None:
+    """Schedule a best-effort prompt-quality audit reusing THIS model object.
+
+    `call_llm` runs one `generate_content` on the same GenerativeModel under
+    emit suppression — the audit manager's suppression check prevents that
+    borrowed call (which re-enters the class-patched wrapper) from recursing
+    into another audit. Sync path only. Never raises into host code."""
+    try:
+        prompt_text = _prompt_text(args, kwargs)
+        if not prompt_text:
+            return
+        model = _model_name(model_obj)
+        feature = (ctx.feature_name if ctx else None) or sdk._config.default_feature
+        prompt_version = (
+            (ctx.prompt_version if ctx else None) or sdk._config.default_prompt_version
+        )
+
+        def call_llm(audit_prompt: str) -> Any:
+            with _context.suppress_llm_emit_scope():
+                return model_obj.generate_content(audit_prompt).text
+
+        from .._audit import get_audit_manager
+
+        get_audit_manager(sdk).maybe_audit(
+            feature_name=feature,
+            prompt_version=prompt_version,
+            prompt_text=prompt_text,
+            model=model,
+            provider=PROVIDER,
+            project=sdk._config.project,
+            call_llm=call_llm,
+        )
+    except Exception:  # noqa: BLE001 — never break the host
+        pass

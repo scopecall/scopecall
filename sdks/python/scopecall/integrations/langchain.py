@@ -209,6 +209,7 @@ class ScopeCallCallbackHandler(_Base):  # type: ignore[misc,valid-type]
         if sdk is None:
             return
         model, provider, in_tok, out_tok = _parse_llm_result(response)
+        cache_read = _parse_cache_read(response)
         try:
             sdk.record_llm_call(
                 model=model,
@@ -217,6 +218,7 @@ class ScopeCallCallbackHandler(_Base):  # type: ignore[misc,valid-type]
                 output_tokens=out_tok,
                 latency_ms=int((time.time() - start) * 1000),
                 status="success",
+                cache_read_tokens=cache_read,
                 context=parent_ctx,
                 customer_id=self._customer_id,
                 prompt_version=self._prompt_version,
@@ -291,6 +293,60 @@ def _parse_llm_result(response) -> tuple[str, str, int, int]:
     except Exception:
         pass
     return model or "unknown", provider, in_tok, out_tok
+
+
+def _cached_from_token_usage(meta) -> int | None:
+    """Pull cached input tokens from an OpenAI-shaped usage dict:
+    `{... "prompt_tokens_details": {"cached_tokens": N}}`. Accepts either a
+    `token_usage`/`usage` wrapper or the details dict directly."""
+    if not isinstance(meta, dict):
+        return None
+    usage = meta.get("token_usage") or meta.get("usage") or meta
+    if isinstance(usage, dict):
+        details = usage.get("prompt_tokens_details")
+        if isinstance(details, dict) and details.get("cached_tokens") is not None:
+            try:
+                return int(details["cached_tokens"])
+            except (TypeError, ValueError):
+                return None
+    return None
+
+
+def _parse_cache_read(response) -> int | None:
+    """Extract cache-read (prompt-cache-hit) input tokens from an LLMResult.
+
+    Sources, in priority order:
+      1. `generations[..].message.usage_metadata['input_token_details']['cache_read']`
+         — the newer langchain-core shape.
+      2. `generations[..].message.response_metadata` → OpenAI
+         `prompt_tokens_details.cached_tokens`.
+      3. `llm_output` → `token_usage.prompt_tokens_details.cached_tokens`.
+    Returns None when nothing cache-related is present (keeps the wire field
+    null rather than a spurious 0). Never raises."""
+    try:
+        gens = getattr(response, "generations", None) or []
+        for row in gens:
+            for g in row:
+                msg = getattr(g, "message", None)
+                if msg is None:
+                    continue
+                um = getattr(msg, "usage_metadata", None)
+                if isinstance(um, dict):
+                    detail = um.get("input_token_details")
+                    if isinstance(detail, dict) and detail.get("cache_read") is not None:
+                        try:
+                            return int(detail["cache_read"])
+                        except (TypeError, ValueError):
+                            pass
+                cr = _cached_from_token_usage(getattr(msg, "response_metadata", None))
+                if cr is not None:
+                    return cr
+        cr = _cached_from_token_usage(getattr(response, "llm_output", None))
+        if cr is not None:
+            return cr
+    except Exception:
+        pass
+    return None
 
 
 def instrument(sdk: Any | None = None, **kwargs) -> ScopeCallCallbackHandler:

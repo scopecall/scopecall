@@ -28,7 +28,9 @@ flow-map JOIN finds no parent.
 
 from __future__ import annotations
 
+import contextlib
 import uuid
+from collections.abc import Iterator
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Literal
@@ -159,6 +161,26 @@ def set_suppress_llm_emit(value: bool) -> object:
 
 def reset_suppress_llm_emit(token: object) -> None:
     _suppress_llm_emit.reset(token)  # type: ignore[arg-type]
+
+
+@contextlib.contextmanager
+def suppress_llm_emit_scope() -> Iterator[None]:
+    """Context-manager form of the suppression flag.
+
+    Sets `_suppress_llm_emit` True for the duration of the block and resets
+    it on exit (exception-safe via the token). The prompt-audit uses this to
+    wrap the borrowed-client completion so the audit call is NOT itself
+    traced/emitted (and, since maybe_audit no-ops while suppression is set,
+    an audit can never recursively trigger another audit).
+
+    `suppress_llm_emit()` (the plain getter above) is what the emit chokepoint
+    reads; this is the scoped setter/resetter the audit path uses.
+    """
+    token = _suppress_llm_emit.set(True)
+    try:
+        yield
+    finally:
+        _suppress_llm_emit.reset(token)
 
 
 def new_span_id() -> str:
