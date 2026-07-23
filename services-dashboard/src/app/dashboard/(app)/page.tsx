@@ -22,6 +22,7 @@ import { useOrgId } from "@/lib/org-context";
 import { useOverview } from "@/lib/queries/use-overview";
 import { useCostConfidence } from "@/lib/queries/use-cost-confidence";
 import { useWasteInbox, type WasteItem, type WasteKind } from "@/lib/queries/use-waste-inbox";
+import { useRecommendations } from "@/lib/queries/use-recommendations";
 import { useTopMovers } from "@/lib/queries/use-top-movers";
 import { useWorkflowCostTree } from "@/lib/queries/use-workflow-cost-tree";
 import {
@@ -30,6 +31,7 @@ import {
   useLatencyMetrics,
 } from "@/lib/queries/use-metrics";
 import { FirstRunDashboard } from "@/components/overview/first-run";
+import { OptimizationGaps } from "@/components/overview/optimization-gaps";
 import { AreaChart, ConfidenceBar, CostBars, Delta, Sparkline, type TreeNode } from "./_components/viz";
 import { globalScopeQuery, useTimeRange } from "./_lib/use-time-range";
 
@@ -88,6 +90,7 @@ export default function V2OverviewPage() {
   const prev = useOverview({ orgId: oid, from: priorFrom, to: priorTo, ...scope }, enabled);
   const conf = useCostConfidence({ orgId: oid, from, to, ...scope }, enabled);
   const wasteQ = useWasteInbox({ orgId: oid, from, to, ...scope }, enabled);
+  const recsQ = useRecommendations({ orgId: oid, from, to, ...scope }, enabled);
   const moversFeature = useTopMovers({ orgId: oid, from, to, groupBy: "feature", limit: 8, ...scope }, enabled);
   const moversTreemap = useTopMovers(
     { orgId: oid, from, to, groupBy: moversDim, limit: 14, ...scope },
@@ -343,6 +346,9 @@ export default function V2OverviewPage() {
           </div>
         </div>
       </section>
+
+      {/* ── OPTIMIZATION GAPS · caching/token/speed/reliability/prompt-quality ── */}
+      <OptimizationGaps data={recsQ.data} isLoading={recsQ.isLoading} onOpenTraces={drill} />
 
       {/* ── ROW 2 · THREE DECISION TILES ───────────────────────────────────── */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

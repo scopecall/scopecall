@@ -254,6 +254,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/recommendations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Optimization-gap findings (Overview)
+         * @description Deterministic analyzers over llm_calls (prompt-cache blind spots, input bloat, output truncation, sequential chains, latency variance) plus LLM prompt-quality insights captured by the SDK's per-build prompt audit. Ranked by severity then impact. `token_wastage_pct` is a headline stat: tokens spent on errored, truncated, or retried calls as a share of total.
+         */
+        get: operations["GetRecommendations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/cost-confidence": {
         parameters: {
             query?: never;
@@ -701,6 +721,34 @@ export interface components {
              */
             total_savings_usd: number;
             items: components["schemas"]["WasteItem"][];
+        };
+        RecommendationFinding: {
+            /** @enum {string} */
+            category: "caching" | "tokens" | "speed" | "reliability" | "prompt_quality";
+            /** @enum {string} */
+            severity: "high" | "medium" | "low";
+            title: string;
+            detail: string;
+            recommendation: string;
+            /** @enum {string} */
+            impact_kind: "usd" | "tokens_pct" | "seconds" | "calls" | "none";
+            /** Format: double */
+            impact_value: number;
+            evidence: string;
+            model?: string;
+            feature?: string;
+            /** @enum {string} */
+            source: "rule" | "llm_insight";
+            prompt_version?: string;
+        };
+        RecommendationsResponse: {
+            window_seconds: number;
+            /**
+             * Format: double
+             * @description Tokens spent on errored + truncated + retried calls as a percent of total.
+             */
+            token_wastage_pct: number;
+            findings: components["schemas"]["RecommendationFinding"][];
         };
         CostSourceShare: {
             /** @description Closed enum at the processor: server_computed | sdk_fallback | unknown_model | container. The schema keeps it open-typed for forward compatibility. */
@@ -1311,6 +1359,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WasteInboxResponse"];
+                };
+            };
+            400: components["responses"]["Problem400"];
+            401: components["responses"]["Problem401"];
+            403: components["responses"]["Problem403"];
+        };
+    };
+    GetRecommendations: {
+        parameters: {
+            query: {
+                /** @description Organization ID. Must match the org_id in the authenticated token. */
+                org_id: components["parameters"]["OrgId"];
+                /** @description Absolute ISO8601 timestamp (e.g. 2026-05-01T00:00:00Z). Relative values (now-24h) are rejected with 400. */
+                from: components["parameters"]["From"];
+                /** @description Absolute ISO8601 timestamp (e.g. 2026-05-22T00:00:00Z). Must be after 'from'. */
+                to: components["parameters"]["To"];
+                /** @description v0.4 — scope to one environment (server tier). */
+                environment?: components["parameters"]["EnvironmentScope"];
+                /** @description v0.4 — scope to one project (application/service label, orthogonal to environment). */
+                project?: components["parameters"]["ProjectScope"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Optimization findings ordered by severity then impact */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecommendationsResponse"];
                 };
             };
             400: components["responses"]["Problem400"];
