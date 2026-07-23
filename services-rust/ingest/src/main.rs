@@ -53,6 +53,9 @@ async fn main() -> anyhow::Result<()> {
         .route("/v1/ingest", post(routes::ingest::handler))
         // OpenTelemetry GenAI ingest bridge — OTLP/HTTP JSON trace export.
         .route("/v1/traces", post(routes::otlp::handler))
+        // Phase-B SDK prompt-quality audit: dedup gate + finding storage.
+        .route("/v1/prompt-audit/seen", get(routes::prompt_audit::seen))
+        .route("/v1/prompt-audit", post(routes::prompt_audit::store))
         .layer(TraceLayer::new_for_http())
         .layer(TimeoutLayer::with_status_code(
             axum::http::StatusCode::REQUEST_TIMEOUT,
