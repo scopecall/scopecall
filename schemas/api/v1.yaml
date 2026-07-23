@@ -694,6 +694,45 @@ components:
         items:
           type: array
           items: { $ref: "#/components/schemas/WasteItem" }
+    RecommendationFinding:
+      type: object
+      required: [category, severity, title, detail, recommendation, impact_kind, impact_value, evidence, source]
+      properties:
+        category:
+          type: string
+          enum: [caching, tokens, speed, reliability, prompt_quality]
+        severity:
+          type: string
+          enum: [high, medium, low]
+        title: { type: string }
+        detail: { type: string }
+        recommendation: { type: string }
+        impact_kind:
+          type: string
+          enum: [usd, tokens_pct, seconds, calls, none]
+        impact_value:
+          type: number
+          format: double
+        evidence: { type: string }
+        model: { type: string }
+        feature: { type: string }
+        source:
+          type: string
+          enum: [rule, llm_insight]
+        prompt_version: { type: string }
+    RecommendationsResponse:
+      type: object
+      required: [window_seconds, token_wastage_pct, findings]
+      properties:
+        window_seconds: { type: integer }
+        token_wastage_pct:
+          type: number
+          format: double
+          description: Tokens spent on errored + truncated + retried calls as a percent of total.
+        findings:
+          type: array
+          items:
+            $ref: "#/components/schemas/RecommendationFinding"
 
     CostSourceShare:
       type: object
@@ -1413,6 +1452,37 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/WasteInboxResponse"
+        "400":
+          $ref: "#/components/responses/Problem400"
+        "401":
+          $ref: "#/components/responses/Problem401"
+        "403":
+          $ref: "#/components/responses/Problem403"
+
+  /api/v1/recommendations:
+    get:
+      operationId: GetRecommendations
+      summary: Optimization-gap findings (Overview)
+      description: >
+        Deterministic analyzers over llm_calls (prompt-cache blind spots,
+        input bloat, output truncation, sequential chains, latency variance)
+        plus LLM prompt-quality insights captured by the SDK's per-build
+        prompt audit. Ranked by severity then impact. `token_wastage_pct`
+        is a headline stat: tokens spent on errored, truncated, or retried
+        calls as a share of total.
+      parameters:
+        - $ref: "#/components/parameters/OrgId"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - $ref: "#/components/parameters/EnvironmentScope"
+        - $ref: "#/components/parameters/ProjectScope"
+      responses:
+        "200":
+          description: Optimization findings ordered by severity then impact
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecommendationsResponse"
         "400":
           $ref: "#/components/responses/Problem400"
         "401":

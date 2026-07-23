@@ -17,6 +17,11 @@ import (
 // Server implements gen.StrictServerInterface.
 type Server struct {
 	CH driver.Conn
+	// Redis is used by the hand-wired /recommendations endpoint to read
+	// Phase-B prompt-quality audits (source=llm_insight) that ingest stashes
+	// under scopecall:pa:*. Best-effort — a nil handle degrades to rule-only
+	// findings rather than failing the request.
+	Redis *redis.Client
 }
 
 var _ gen.StrictServerInterface = (*Server)(nil)

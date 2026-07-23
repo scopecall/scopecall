@@ -132,7 +132,11 @@ func main() {
 	go alerts.NewEvaluator(alertStore, ch, log).Run(context.Background(), 60*time.Second)
 
 	// ── Strict handler (implements StrictServerInterface) ──────────────────
-	srv := &handler.Server{CH: ch}
+	// Redis handle is wired in so /recommendations can read Phase-B
+	// prompt-quality audits (source=llm_insight) that ingest stashes under
+	// scopecall:pa:*. Best-effort: the endpoint still returns rule findings if
+	// Redis is unavailable.
+	srv := &handler.Server{CH: ch, Redis: rdb}
 	strictHandler := gen.NewStrictHandler(srv, nil)
 
 	// ── Router ─────────────────────────────────────────────────────────────
@@ -190,6 +194,10 @@ func main() {
 		// changes on the hour, not the second.
 		"waste_inbox":     60 * time.Second,
 		"cost_confidence": 60 * time.Second,
+		// Optimization Gaps — six deterministic analyzers + best-effort Redis
+		// read of Phase-B prompt audits. Same cadence as the other rollup
+		// endpoints; the underlying signals move on the hour, not the second.
+		"recommendations": 60 * time.Second,
 		// Distinct project labels — changes only when a new SDK config
 		// ships, so a longer TTL would be fine; 60s keeps first-appearance
 		// latency (new project → visible in picker) tolerable.
@@ -344,6 +352,12 @@ func main() {
 		// misuse, high-error workflows). Surfaced on Overview.
 		r.With(apimw.Cache(rdb, cacheTTLs["waste_inbox"], "waste_inbox")).
 			Get("/api/v1/waste-inbox", srv.GetWasteInboxHTTP)
+
+		// Optimization Gaps — deterministic analyzers (caching / tokens / speed
+		// / reliability) over llm_calls, plus Phase-B prompt-quality audits read
+		// best-effort from Redis. Surfaced on Overview next to Waste Inbox.
+		r.With(apimw.Cache(rdb, cacheTTLs["recommendations"], "recommendations")).
+			Get("/api/v1/recommendations", srv.GetRecommendationsHTTP)
 
 		// Cost confidence — "how much of your reported cost is server-priced
 		// (verified) vs SDK-fallback / unknown-model (unverifiable)?" + a
